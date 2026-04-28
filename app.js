@@ -153,12 +153,19 @@ function setActiveView(view = "review", push = true) {
   document.querySelectorAll("[data-view-link]").forEach((link) => {
     link.classList.toggle("active", link.dataset.viewLink === activeView);
   });
+  renderTeamSelectionState();
   if (pageTitle) pageTitle.textContent = VIEW_TITLES[activeView];
   if (push && window.location.hash !== `#${activeView}`) {
     const url = new URL(window.location.href);
     url.hash = activeView;
     window.history.replaceState(null, "", url);
   }
+}
+
+function renderTeamSelectionState() {
+  document.querySelectorAll(".team-button").forEach((button) => {
+    button.classList.toggle("active", activeView === "review" && button.dataset.teamId === selectedTeamId);
+  });
 }
 
 function createDefaultReview(week = currentMondayISO()) {
@@ -477,7 +484,8 @@ function renderTeams() {
   review.teams.forEach((team) => {
     const readiness = teamReadiness(team);
     const button = document.createElement("button");
-    button.className = `team-button${team.id === selectedTeamId ? " active" : ""}`;
+    button.className = `team-button${activeView === "review" && team.id === selectedTeamId ? " active" : ""}`;
+    button.dataset.teamId = team.id;
     button.type = "button";
     button.innerHTML = `
       <span class="team-avatar">${escapeHtml(team.initials)}</span>
@@ -490,6 +498,7 @@ function renderTeams() {
     `;
     button.addEventListener("click", () => {
       selectedTeamId = team.id;
+      setActiveView("review");
       renderApp();
     });
     teamList.append(button);
