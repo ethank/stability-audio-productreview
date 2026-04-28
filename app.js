@@ -272,6 +272,53 @@ function rolloverReview(previousPayload, nextWeekStart) {
   });
 }
 
+function blankTeam(team) {
+  return {
+    ...team,
+    did: [],
+    doing: [],
+    blocked: [],
+    mvps: [],
+  };
+}
+
+function blankReview(targetWeekStart, templatePayload = null) {
+  const template = templatePayload ? normalizeReview(templatePayload) : createDefaultReview(targetWeekStart);
+  return normalizeReview({
+    weekStart: targetWeekStart,
+    title: template.title,
+    departmentHeadUpdate: "No review record has been started for this week yet.",
+    teamWideUpdates: ["No review record has been started for this week yet."],
+    teams: template.teams.map(blankTeam),
+    history: template.history || [],
+    status: "not_started",
+    updatedBy: template.updatedBy || "Ethan",
+    lockedAt: null,
+  });
+}
+
+function isSeededDefaultReview(payload) {
+  const review = normalizeReview(payload);
+  const fallback = createDefaultReview(review.weekStart);
+  return (
+    review.status === "draft" &&
+    !review.previousWeekStart &&
+    !review.createdFromWeekStart &&
+    review.departmentHeadUpdate === fallback.departmentHeadUpdate &&
+    review.teams.length === DEFAULT_TEAMS.length &&
+    review.teams.every((team, index) => {
+      const seed = DEFAULT_TEAMS[index];
+      return (
+        team.id === seed.id &&
+        team.did?.length === seed.did.length &&
+        team.doing?.length === seed.doing.length &&
+        team.blocked?.length === seed.blocked.length &&
+        team.mvps?.length === seed.mvps.length
+      );
+    })
+  );
+}
+
 function localWeeks() {
   const stored = localStorage.getItem(LOCAL_WEEKS_KEY);
   if (stored) return JSON.parse(stored);
@@ -288,11 +335,20 @@ function saveLocalWeek(payload) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 }
 
-function localReviewForWeek(targetWeekStart) {
+function localReviewForWeek(targetWeekStart, options = {}) {
   const weeks = localWeeks();
-  if (weeks[targetWeekStart]) return normalizeReview(weeks[targetWeekStart]);
+  if (weeks[targetWeekStart]) {
+    if (options.emptyIfSeed && isSeededDefaultReview(weeks[targetWeekStart])) {
+      weeks[targetWeekStart] = blankReview(targetWeekStart, weeks[targetWeekStart]);
+      localStorage.setItem(LOCAL_WEEKS_KEY, JSON.stringify(weeks));
+    }
+    return normalizeReview(weeks[targetWeekStart]);
+  }
   const previousWeekStart = addDaysISO(targetWeekStart, -7);
-  const created = weeks[previousWeekStart] ? rolloverReview(weeks[previousWeekStart], targetWeekStart) : createDefaultReview(targetWeekStart);
+  const created =
+    options.rollover && weeks[previousWeekStart] && weeks[previousWeekStart].status !== "not_started"
+      ? rolloverReview(weeks[previousWeekStart], targetWeekStart)
+      : blankReview(targetWeekStart, weeks[previousWeekStart]);
   weeks[targetWeekStart] = created;
   localStorage.setItem(LOCAL_WEEKS_KEY, JSON.stringify(weeks));
   return created;
@@ -616,26 +672,30 @@ function changeSlide(direction) {
   renderPresentation();
 }
 
-async function loadReview(targetWeekStart = null) {
+async function loadReview(targetWeekStart = null, options = {}) {
   if (window.location.protocol === "file:") {
-    review = targetWeekStart ? localReviewForWeek(targetWeekStart) : localReviewForWeek(currentMondayISO());
+    review = targetWeekStart ? localReviewForWeek(targetWeekStart, options) : localReviewForWeek(currentMondayISO(), { rollover: true });
     weekStart = parseDateOnly(review.weekStart);
     saveState = "Local file fallback";
     return;
   }
 
-  const response = await fetch(targetWeekStart ? `/api/reviews/${targetWeekStart}` : "/api/reviews/current");
+  const params = new URLSearchParams();
+  if (options.rollover) params.set("rollover", "1");
+  if (options.emptyIfSeed) params.set("emptyIfSeed", "1");
+  const query = params.toString();
+  const response = await fetch(targetWeekStart ? `/api/reviews/${targetWeekStart}${query ? `?${query}` : ""}` : "/api/reviews/current");
   if (!response.ok) throw new Error(`Could not load review: ${response.status}`);
   review = normalizeReview(await response.json());
   weekStart = parseDateOnly(review.weekStart);
   saveState = "Saved";
 }
 
-async function loadWeek(targetWeekStart) {
+async function loadWeek(targetWeekStart, options = {}) {
   clearTimeout(saveTimer);
   saveState = "Loading...";
   saveStateLabel.textContent = saveState;
-  await loadReview(targetWeekStart);
+  await loadReview(targetWeekStart, options);
   if (!review.teams.some((team) => team.id === selectedTeamId)) {
     selectedTeamId = review.teams[0]?.id || "research";
   }
@@ -744,7 +804,7 @@ document.querySelectorAll("[data-open-view]").forEach((button) => {
 window.addEventListener("hashchange", () => setActiveView(viewFromHash(), false));
 
 document.querySelector("#prevWeek").addEventListener("click", () => {
-  loadWeek(addDaysISO(review.weekStart, -7)).catch((error) => {
+  loadWeek(addDaysISO(review.weekStart, -7), { rollover: false, emptyIfSeed: true }).catch((error) => {
     console.error(error);
     saveState = "Load failed";
     saveStateLabel.textContent = saveState;
@@ -752,7 +812,7 @@ document.querySelector("#prevWeek").addEventListener("click", () => {
 });
 
 document.querySelector("#nextWeek").addEventListener("click", () => {
-  loadWeek(addDaysISO(review.weekStart, 7)).catch((error) => {
+  loadWeek(addDaysISO(review.weekStart, 7), { rollover: true }).catch((error) => {
     console.error(error);
     saveState = "Load failed";
     saveStateLabel.textContent = saveState;
@@ -760,7 +820,7 @@ document.querySelector("#nextWeek").addEventListener("click", () => {
 });
 
 document.querySelector("#todayButton").addEventListener("click", () => {
-  loadWeek(currentMondayISO()).catch((error) => {
+  loadWeek(currentMondayISO(), { rollover: true }).catch((error) => {
     console.error(error);
     saveState = "Load failed";
     saveStateLabel.textContent = saveState;

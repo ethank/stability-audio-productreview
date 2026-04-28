@@ -197,6 +197,57 @@ function rolloverReview(previousPayload, weekStart) {
   );
 }
 
+function blankTeam(team) {
+  return {
+    ...team,
+    did: [],
+    doing: [],
+    blocked: [],
+    mvps: [],
+  };
+}
+
+function blankReview(weekStart, templatePayload = null) {
+  const template = templatePayload ? normalizeReview(templatePayload, templatePayload.weekStart) : defaultReview(weekStart);
+  return normalizeReview(
+    {
+      weekStart,
+      title: template.title || "Stability Monday Product Review",
+      departmentHeadUpdate: "No review record has been started for this week yet.",
+      teamWideUpdates: ["No review record has been started for this week yet."],
+      teams: template.teams.map(blankTeam),
+      history: template.history || [],
+      status: "not_started",
+      updatedBy: template.updatedBy || "Ethan",
+      lockedAt: null,
+      createdAt: new Date().toISOString(),
+    },
+    weekStart,
+  );
+}
+
+function isSeededDefaultReview(payload, weekStart) {
+  const review = normalizeReview(payload, weekStart);
+  const defaultHead = defaultReview(weekStart).departmentHeadUpdate;
+  return (
+    review.status === "draft" &&
+    !review.previousWeekStart &&
+    !review.createdFromWeekStart &&
+    review.departmentHeadUpdate === defaultHead &&
+    review.teams.length === DEFAULT_TEAMS.length &&
+    review.teams.every((team, index) => {
+      const seed = DEFAULT_TEAMS[index];
+      return (
+        team.id === seed.id &&
+        team.did?.length === seed.did.length &&
+        team.doing?.length === seed.doing.length &&
+        team.blocked?.length === seed.blocked.length &&
+        team.mvps?.length === seed.mvps.length
+      );
+    })
+  );
+}
+
 function isValidWeekStart(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
@@ -256,11 +307,19 @@ async function createStore() {
           if (!result.rows.length) return null;
           return { ...result.rows[0].payload, lockedAt: result.rows[0].locked_at };
         },
-        async getOrCreate(weekStart) {
+        async getOrCreate(weekStart, options = {}) {
           const existing = await this.get(weekStart);
-          if (existing) return existing;
+          if (existing) {
+            if (options.emptyIfSeed && isSeededDefaultReview(existing, weekStart)) {
+              return this.put(weekStart, blankReview(weekStart, existing));
+            }
+            return existing;
+          }
           const previous = await this.get(addDaysISO(weekStart, -7));
-          return this.put(weekStart, previous ? rolloverReview(previous, weekStart) : defaultReview(weekStart));
+          if (options.rollover && previous && previous.status !== "not_started") {
+            return this.put(weekStart, rolloverReview(previous, weekStart));
+          }
+          return this.put(weekStart, blankReview(weekStart, previous));
         },
         async put(weekStart, payload) {
           const review = normalizeReview(payload, weekStart);
@@ -303,11 +362,19 @@ async function createStore() {
       const data = await this.readAll();
       return data.reviews[weekStart] || null;
     },
-    async getOrCreate(weekStart) {
+    async getOrCreate(weekStart, options = {}) {
       const existing = await this.get(weekStart);
-      if (existing) return existing;
+      if (existing) {
+        if (options.emptyIfSeed && isSeededDefaultReview(existing, weekStart)) {
+          return this.put(weekStart, blankReview(weekStart, existing));
+        }
+        return existing;
+      }
       const previous = await this.get(addDaysISO(weekStart, -7));
-      return this.put(weekStart, previous ? rolloverReview(previous, weekStart) : defaultReview(weekStart));
+      if (options.rollover && previous && previous.status !== "not_started") {
+        return this.put(weekStart, rolloverReview(previous, weekStart));
+      }
+      return this.put(weekStart, blankReview(weekStart, previous));
     },
     async put(weekStart, payload) {
       const data = await this.readAll();
@@ -372,7 +439,7 @@ async function main() {
 
       if (req.method === "GET" && pathname === "/api/reviews/current") {
         const weekStart = currentMondayISO();
-        const review = await store.getOrCreate(weekStart);
+        const review = await store.getOrCreate(weekStart, { rollover: true });
         sendJson(res, 200, review);
         return;
       }
@@ -385,7 +452,10 @@ async function main() {
           return;
         }
         if (req.method === "GET" && !lockPath) {
-          const review = await store.getOrCreate(weekStart);
+          const review = await store.getOrCreate(weekStart, {
+            rollover: url.searchParams.get("rollover") === "1",
+            emptyIfSeed: url.searchParams.get("emptyIfSeed") === "1",
+          });
           sendJson(res, 200, review);
           return;
         }
