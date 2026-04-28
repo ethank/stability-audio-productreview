@@ -150,6 +150,53 @@ function normalizeReview(payload, weekStart) {
   };
 }
 
+function addDaysISO(value, days) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().slice(0, 10);
+}
+
+function summarizePreviousWeek(previous) {
+  const mvpCount = previous.teams.reduce((sum, team) => sum + team.mvps.length, 0);
+  const blockerCount = previous.teams.reduce((sum, team) => sum + team.blocked.length, 0);
+  return `${previous.teams.length} departments reported, ${mvpCount} MVPs logged, ${blockerCount} blockers carried into review.`;
+}
+
+function rolloverItem(prefix, item) {
+  const [title, detail, owner] = item;
+  return [title, `${prefix}: ${detail}`, owner];
+}
+
+function rolloverReview(previousPayload, weekStart) {
+  const previous = normalizeReview(previousPayload, previousPayload.weekStart);
+  return normalizeReview(
+    {
+      weekStart,
+      title: previous.title || "Stability Monday Product Review",
+      departmentHeadUpdate: `Update from last week: ${summarizePreviousWeek(previous)} Add this week's department-head readout here.`,
+      teamWideUpdates: [
+        `Update from last week: ${summarizePreviousWeek(previous)}`,
+        "This week's priorities: add the cross-team decisions and asks before review.",
+      ],
+      teams: previous.teams.map((team) => ({
+        ...team,
+        did: team.doing.map((item) => rolloverItem("Update from last week", item)),
+        doing: [],
+        blocked: team.blocked.map((item) => rolloverItem("Still blocked from last week", item)),
+        mvps: [],
+      })),
+      history: previous.history,
+      status: "draft",
+      updatedBy: previous.updatedBy || "Ethan",
+      previousWeekStart: previous.weekStart,
+      createdFromWeekStart: previous.weekStart,
+      lockedAt: null,
+      createdAt: new Date().toISOString(),
+    },
+    weekStart,
+  );
+}
+
 function isValidWeekStart(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
@@ -209,6 +256,12 @@ async function createStore() {
           if (!result.rows.length) return null;
           return { ...result.rows[0].payload, lockedAt: result.rows[0].locked_at };
         },
+        async getOrCreate(weekStart) {
+          const existing = await this.get(weekStart);
+          if (existing) return existing;
+          const previous = await this.get(addDaysISO(weekStart, -7));
+          return this.put(weekStart, previous ? rolloverReview(previous, weekStart) : defaultReview(weekStart));
+        },
         async put(weekStart, payload) {
           const review = normalizeReview(payload, weekStart);
           await pool.query(
@@ -249,6 +302,12 @@ async function createStore() {
     async get(weekStart) {
       const data = await this.readAll();
       return data.reviews[weekStart] || null;
+    },
+    async getOrCreate(weekStart) {
+      const existing = await this.get(weekStart);
+      if (existing) return existing;
+      const previous = await this.get(addDaysISO(weekStart, -7));
+      return this.put(weekStart, previous ? rolloverReview(previous, weekStart) : defaultReview(weekStart));
     },
     async put(weekStart, payload) {
       const data = await this.readAll();
@@ -313,7 +372,7 @@ async function main() {
 
       if (req.method === "GET" && pathname === "/api/reviews/current") {
         const weekStart = currentMondayISO();
-        const review = (await store.get(weekStart)) || (await store.put(weekStart, defaultReview(weekStart)));
+        const review = await store.getOrCreate(weekStart);
         sendJson(res, 200, review);
         return;
       }
@@ -326,7 +385,7 @@ async function main() {
           return;
         }
         if (req.method === "GET" && !lockPath) {
-          const review = (await store.get(weekStart)) || (await store.put(weekStart, defaultReview(weekStart)));
+          const review = await store.getOrCreate(weekStart);
           sendJson(res, 200, review);
           return;
         }

@@ -78,6 +78,7 @@ const DEFAULT_HISTORY = [
 ];
 
 const STORAGE_KEY = "stability-product-review-current";
+const LOCAL_WEEKS_KEY = "stability-product-review-weeks";
 
 let review = createDefaultReview();
 let selectedTeamId = "research";
@@ -134,7 +135,9 @@ function setActiveView(view = "review", push = true) {
   });
   if (pageTitle) pageTitle.textContent = VIEW_TITLES[activeView];
   if (push && window.location.hash !== `#${activeView}`) {
-    window.history.replaceState(null, "", `#${activeView}`);
+    const url = new URL(window.location.href);
+    url.hash = activeView;
+    window.history.replaceState(null, "", url);
   }
 }
 
@@ -195,6 +198,14 @@ function setWeekLabel() {
   presentationWeek.textContent = weekRange();
 }
 
+function updateWeekUrl() {
+  if (window.location.protocol === "file:") return;
+  const url = new URL(window.location.href);
+  url.searchParams.set("week", review.weekStart);
+  url.hash = activeView;
+  window.history.replaceState(null, "", url);
+}
+
 function allItems(lane) {
   return review.teams.flatMap((team) => team[lane].map((item) => ({ team: team.name, item })));
 }
@@ -218,6 +229,73 @@ function normalizeReview(payload) {
     history: Array.isArray(next.history) ? next.history : fallback.history,
     teamWideUpdates: Array.isArray(next.teamWideUpdates) ? next.teamWideUpdates : fallback.teamWideUpdates,
   };
+}
+
+function addDaysISO(value, days) {
+  return dateOnly(new Date(parseDateOnly(value).getFullYear(), parseDateOnly(value).getMonth(), parseDateOnly(value).getDate() + days));
+}
+
+function summarizePreviousWeek(previous) {
+  const mvpCount = previous.teams.reduce((sum, team) => sum + team.mvps.length, 0);
+  const blockerCount = previous.teams.reduce((sum, team) => sum + team.blocked.length, 0);
+  return `${previous.teams.length} departments reported, ${mvpCount} MVPs logged, ${blockerCount} blockers carried into review.`;
+}
+
+function rolloverItem(prefix, item) {
+  const [title, detail, owner] = item;
+  return [title, `${prefix}: ${detail}`, owner];
+}
+
+function rolloverReview(previousPayload, nextWeekStart) {
+  const previous = normalizeReview(previousPayload);
+  return normalizeReview({
+    weekStart: nextWeekStart,
+    title: previous.title,
+    departmentHeadUpdate: `Update from last week: ${summarizePreviousWeek(previous)} Add this week's department-head readout here.`,
+    teamWideUpdates: [
+      `Update from last week: ${summarizePreviousWeek(previous)}`,
+      "This week's priorities: add the cross-team decisions and asks before review.",
+    ],
+    teams: previous.teams.map((team) => ({
+      ...team,
+      did: team.doing.map((item) => rolloverItem("Update from last week", item)),
+      doing: [],
+      blocked: team.blocked.map((item) => rolloverItem("Still blocked from last week", item)),
+      mvps: [],
+    })),
+    history: previous.history,
+    status: "draft",
+    updatedBy: previous.updatedBy || "Ethan",
+    previousWeekStart: previous.weekStart,
+    createdFromWeekStart: previous.weekStart,
+    lockedAt: null,
+  });
+}
+
+function localWeeks() {
+  const stored = localStorage.getItem(LOCAL_WEEKS_KEY);
+  if (stored) return JSON.parse(stored);
+  const legacy = localStorage.getItem(STORAGE_KEY);
+  if (!legacy) return {};
+  const legacyReview = normalizeReview(JSON.parse(legacy));
+  return { [legacyReview.weekStart]: legacyReview };
+}
+
+function saveLocalWeek(payload) {
+  const weeks = localWeeks();
+  weeks[payload.weekStart] = payload;
+  localStorage.setItem(LOCAL_WEEKS_KEY, JSON.stringify(weeks));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+}
+
+function localReviewForWeek(targetWeekStart) {
+  const weeks = localWeeks();
+  if (weeks[targetWeekStart]) return normalizeReview(weeks[targetWeekStart]);
+  const previousWeekStart = addDaysISO(targetWeekStart, -7);
+  const created = weeks[previousWeekStart] ? rolloverReview(weeks[previousWeekStart], targetWeekStart) : createDefaultReview(targetWeekStart);
+  weeks[targetWeekStart] = created;
+  localStorage.setItem(LOCAL_WEEKS_KEY, JSON.stringify(weeks));
+  return created;
 }
 
 function renderTeamWideUpdates() {
@@ -447,7 +525,7 @@ function teamSlide(team) {
       <p class="slide-north-star">${escapeHtml(team.northStar)}</p>
       <div class="slide-grid">
         <section>
-          <h3>Did</h3>
+          <h3>Update from last week</h3>
           <ul>${listMarkup(team.did.map((item) => ({ team: team.name, item })), 3)}</ul>
         </section>
         <section>
@@ -519,14 +597,18 @@ function openPresentation() {
   document.body.classList.add("is-presenting");
   renderPresentation();
   if (!new URLSearchParams(window.location.search).has("present")) {
-    window.history.replaceState(null, "", `${window.location.pathname}?present=1`);
+    const url = new URL(window.location.href);
+    url.searchParams.set("present", "1");
+    window.history.replaceState(null, "", url);
   }
 }
 
 function closePresentation() {
   presentation.hidden = true;
   document.body.classList.remove("is-presenting");
-  window.history.replaceState(null, "", window.location.pathname);
+  const url = new URL(window.location.href);
+  url.searchParams.delete("present");
+  window.history.replaceState(null, "", url);
 }
 
 function changeSlide(direction) {
@@ -534,20 +616,32 @@ function changeSlide(direction) {
   renderPresentation();
 }
 
-async function loadReview() {
+async function loadReview(targetWeekStart = null) {
   if (window.location.protocol === "file:") {
-    const local = localStorage.getItem(STORAGE_KEY);
-    review = normalizeReview(local ? JSON.parse(local) : createDefaultReview());
+    review = targetWeekStart ? localReviewForWeek(targetWeekStart) : localReviewForWeek(currentMondayISO());
     weekStart = parseDateOnly(review.weekStart);
     saveState = "Local file fallback";
     return;
   }
 
-  const response = await fetch("/api/reviews/current");
+  const response = await fetch(targetWeekStart ? `/api/reviews/${targetWeekStart}` : "/api/reviews/current");
   if (!response.ok) throw new Error(`Could not load review: ${response.status}`);
   review = normalizeReview(await response.json());
   weekStart = parseDateOnly(review.weekStart);
   saveState = "Saved";
+}
+
+async function loadWeek(targetWeekStart) {
+  clearTimeout(saveTimer);
+  saveState = "Loading...";
+  saveStateLabel.textContent = saveState;
+  await loadReview(targetWeekStart);
+  if (!review.teams.some((team) => team.id === selectedTeamId)) {
+    selectedTeamId = review.teams[0]?.id || "research";
+  }
+  setWeekLabel();
+  updateWeekUrl();
+  renderApp();
 }
 
 function scheduleSave() {
@@ -563,7 +657,7 @@ async function saveReview() {
   review.updatedBy = review.updatedBy || "Ethan";
 
   if (window.location.protocol === "file:") {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(review));
+    saveLocalWeek(review);
     saveState = "Saved locally";
     saveStateLabel.textContent = saveState;
     return;
@@ -609,7 +703,7 @@ async function lockReview() {
   saveStateLabel.textContent = saveState;
 
   if (window.location.protocol === "file:") {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(review));
+    saveLocalWeek(review);
     saveState = "Locked locally";
     saveStateLabel.textContent = saveState;
     renderApp();
@@ -650,23 +744,26 @@ document.querySelectorAll("[data-open-view]").forEach((button) => {
 window.addEventListener("hashchange", () => setActiveView(viewFromHash(), false));
 
 document.querySelector("#prevWeek").addEventListener("click", () => {
-  mutateReview(() => {
-    weekStart.setDate(weekStart.getDate() - 7);
-    setWeekLabel();
+  loadWeek(addDaysISO(review.weekStart, -7)).catch((error) => {
+    console.error(error);
+    saveState = "Load failed";
+    saveStateLabel.textContent = saveState;
   });
 });
 
 document.querySelector("#nextWeek").addEventListener("click", () => {
-  mutateReview(() => {
-    weekStart.setDate(weekStart.getDate() + 7);
-    setWeekLabel();
+  loadWeek(addDaysISO(review.weekStart, 7)).catch((error) => {
+    console.error(error);
+    saveState = "Load failed";
+    saveStateLabel.textContent = saveState;
   });
 });
 
 document.querySelector("#todayButton").addEventListener("click", () => {
-  mutateReview(() => {
-    weekStart = parseDateOnly(currentMondayISO());
-    setWeekLabel();
+  loadWeek(currentMondayISO()).catch((error) => {
+    console.error(error);
+    saveState = "Load failed";
+    saveStateLabel.textContent = saveState;
   });
 });
 
@@ -807,16 +904,17 @@ departmentSettings.addEventListener("input", (event) => {
   scheduleSave();
 });
 
-loadReview()
+loadReview(new URLSearchParams(window.location.search).get("week"))
   .catch((error) => {
     console.error(error);
     const local = localStorage.getItem(STORAGE_KEY);
-    review = normalizeReview(local ? JSON.parse(local) : createDefaultReview());
+    review = local ? normalizeReview(JSON.parse(local)) : localReviewForWeek(currentMondayISO());
     weekStart = parseDateOnly(review.weekStart);
     saveState = "Offline fallback";
   })
   .finally(() => {
     setWeekLabel();
+    updateWeekUrl();
     renderApp();
     if (new URLSearchParams(window.location.search).has("present") || window.location.pathname.endsWith("/present")) {
       openPresentation();
