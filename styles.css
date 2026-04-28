@@ -1246,6 +1246,11 @@ h1 svg {
   background: #fff7f4;
 }
 
+.item-fields {
+  display: grid;
+  gap: 6px;
+}
+
 .item-title {
   color: var(--ink);
   font-size: 13px;
@@ -1257,6 +1262,42 @@ h1 svg {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.28;
+}
+
+.item-title-input,
+.item-detail-input,
+.item-owner-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+}
+
+.item-title-input {
+  padding: 2px 4px;
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.2;
+}
+
+.item-detail-input {
+  min-height: 42px;
+  padding: 2px 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.28;
+  resize: vertical;
+}
+
+.item-title-input:focus,
+.item-detail-input:focus,
+.item-owner-input:focus {
+  border-color: var(--line-strong);
+  background: #fff;
+  outline: 2px solid var(--teal-soft);
+  outline-offset: 1px;
 }
 
 .item-meta {
@@ -1272,10 +1313,46 @@ h1 svg {
   font-size: 10px;
 }
 
+.item-owner-input {
+  width: 34px;
+  height: 25px;
+  padding: 0 2px;
+  border-radius: 999px;
+  background: var(--teal-soft);
+  color: var(--teal);
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+  text-transform: uppercase;
+}
+
 .item-date {
+  margin-left: auto;
   color: var(--soft);
   font-size: 11px;
   font-weight: 700;
+}
+
+.item-delete {
+  display: inline-grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--soft);
+}
+
+.item-delete svg {
+  width: 14px;
+  height: 14px;
+}
+
+.item-delete:hover {
+  border-color: #edc0b6;
+  background: #fff7f4;
+  color: var(--red);
 }
 
 .add-row {

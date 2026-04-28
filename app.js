@@ -398,17 +398,22 @@ function renderLane(team, lane) {
   list.innerHTML = "";
   counter.textContent = team[lane].length;
 
-  team[lane].forEach(([title, detail, owner]) => {
+  team[lane].forEach(([title, detail, owner], index) => {
     const item = document.createElement("article");
     item.className = `review-item${lane === "blocked" ? " blocked-item" : ""}`;
+    item.dataset.lane = lane;
+    item.dataset.itemIndex = index;
     item.innerHTML = `
-      <div>
-        <div class="item-title">${escapeHtml(title)}</div>
-        <div class="item-detail">${escapeHtml(detail)}</div>
+      <div class="item-fields">
+        <input class="item-title-input" type="text" value="${escapeHtml(title)}" data-item-field="0" aria-label="${lane} title" />
+        <textarea class="item-detail-input" data-item-field="1" aria-label="${lane} detail">${escapeHtml(detail)}</textarea>
       </div>
       <div class="item-meta">
-        <span class="item-owner">${escapeHtml(owner)}</span>
+        <input class="item-owner-input" type="text" maxlength="4" value="${escapeHtml(owner)}" data-item-field="2" aria-label="${lane} owner" />
         <span class="item-date">Canonical</span>
+        <button class="item-delete" type="button" data-delete-item aria-label="Delete item">
+          <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
       </div>
     `;
     list.append(item);
@@ -917,6 +922,38 @@ document.querySelector("#createUpdate").addEventListener("click", (event) => {
 });
 
 document.querySelector("#saveSnapshot").addEventListener("click", saveSnapshot);
+
+document.querySelectorAll(".items").forEach((list) => {
+  list.addEventListener("input", (event) => {
+    const field = Number(event.target.dataset.itemField);
+    const card = event.target.closest(".review-item");
+    if (!card || !Number.isInteger(field)) return;
+    const team = selectedTeam();
+    const lane = card.dataset.lane;
+    const index = Number(card.dataset.itemIndex);
+    if (!team[lane]?.[index]) return;
+    team[lane][index][field] = field === 2 ? event.target.value.toUpperCase() : event.target.value;
+    if (field === 2 && event.target.value !== team[lane][index][field]) {
+      event.target.value = team[lane][index][field];
+    }
+    renderMetrics();
+    renderMvpPage();
+    renderUpdatesPage();
+    renderPresentation();
+    scheduleSave();
+  });
+
+  list.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-delete-item]");
+    if (!button) return;
+    const card = button.closest(".review-item");
+    const team = selectedTeam();
+    const lane = card.dataset.lane;
+    const index = Number(card.dataset.itemIndex);
+    if (!team[lane]?.[index]) return;
+    mutateReview(() => team[lane].splice(index, 1));
+  });
+});
 
 updatesEditor.addEventListener("input", (event) => {
   const index = Number(event.target.dataset.updateIndex);
