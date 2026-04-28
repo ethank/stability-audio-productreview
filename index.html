@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monday Product Review</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Teams and navigation">
+        <div class="brand">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4" />
+          </svg>
+          <span>Stability Product Review</span>
+        </div>
+
+        <div class="side-section">
+          <div class="side-heading">
+            <span>Teams</span>
+            <div class="mini-actions">
+              <button type="button" aria-label="Add team">
+                <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
+              </button>
+              <button type="button" aria-label="Search teams">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+              </button>
+            </div>
+          </div>
+          <nav class="team-list" id="teamList"></nav>
+        </div>
+
+        <nav class="primary-nav" aria-label="Review navigation">
+          <a class="active" href="#review">
+            <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3v4M16 3v4M4 10h16" /></svg>
+            Monday Review
+          </a>
+          <a href="#updates">
+            <svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" /></svg>
+            Updates
+          </a>
+          <a href="#mvps">
+            <svg viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z" /></svg>
+            MVPs
+          </a>
+          <a href="#history">
+            <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v6h6M12 7v6l4 2" /></svg>
+            History
+          </a>
+          <a href="#settings">
+            <svg viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z" /><path d="m19.4 15 1.2 2.1-2.1 3.6-2.5-1a8.6 8.6 0 0 1-2.4 1.4L13.2 24H9l-.4-2.9a8.6 8.6 0 0 1-2.4-1.4l-2.5 1-2.1-3.6L2.8 15a8.2 8.2 0 0 1 0-2.8L1.6 10 3.7 6.4l2.5 1A8.6 8.6 0 0 1 8.6 6L9 3.2h4.2l.4 2.8A8.6 8.6 0 0 1 16 7.4l2.5-1 2.1 3.6-1.2 2.2a8.2 8.2 0 0 1 0 2.8z" /></svg>
+            Settings
+          </a>
+        </nav>
+
+        <button class="profile" type="button">
+          <span>EK</span>
+          <strong>Ethan Kaplan</strong>
+          <small>Department Head</small>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+        </button>
+      </aside>
+
+      <main class="content" id="review">
+        <header class="topbar">
+          <div>
+            <h1>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="4" y="5" width="16" height="15" rx="2" />
+                <path d="M8 3v4M16 3v4M4 10h16" />
+              </svg>
+              Monday Review
+            </h1>
+            <div class="week-controls" aria-label="Review week controls">
+              <button type="button" id="prevWeek" aria-label="Previous week">
+                <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></svg>
+              </button>
+              <span id="weekLabel">Week of May 12 - May 18, 2025</span>
+              <button type="button" id="nextWeek" aria-label="Next week">
+                <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></svg>
+              </button>
+              <button class="today-button" type="button" id="todayButton">Today</button>
+              <span class="save-state" id="saveState">Saved</span>
+            </div>
+          </div>
+          <div class="top-actions">
+            <button class="primary-action" type="button" id="openUpdate">
+              <svg viewBox="0 0 24 24"><path d="m12 20 9-9-4-4-9 9-2 6zM16 7l1-1a2.8 2.8 0 0 1 4 4l-1 1" /></svg>
+              Add team update
+            </button>
+            <button type="button" id="presentMode">
+              <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></svg>
+              Present
+            </button>
+            <button type="button" aria-label="Export record">
+              <svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14" /></svg>
+            </button>
+            <button type="button" aria-label="More actions">
+              <svg viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01" /></svg>
+            </button>
+          </div>
+        </header>
+
+        <section class="overview-grid" aria-label="Department overview">
+          <article class="overview-card metrics-card">
+            <h2>
+              <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.9" /></svg>
+              Department Overview
+            </h2>
+            <dl class="metrics">
+              <div><dt>Teams reporting</dt><dd id="teamsReporting">6</dd></div>
+              <div><dt>MVPs shipped</dt><dd id="mvpsShipped">14</dd></div>
+              <div><dt>Teams blocked</dt><dd id="teamsBlocked">3</dd></div>
+              <div><dt>Commitments</dt><dd>On track</dd></div>
+            </dl>
+          </article>
+          <article class="overview-card head-update">
+            <h2>Department Head Update</h2>
+            <textarea id="headUpdate" aria-label="Department head update">This week's review is focused on turning Stability Audio progress into a canonical operating record: what moved, what is next, what needs escalation, and which MVPs matter most. Keep updates concrete enough to share live without rebuilding a deck.</textarea>
+          </article>
+          <article class="overview-card team-wide" id="updates">
+            <h2>
+              <svg viewBox="0 0 24 24"><path d="M4 14h4l8 5V5L8 10H4zM18 9a4 4 0 0 1 0 6" /></svg>
+              Team-wide Updates
+            </h2>
+            <ul id="teamWideUpdates">
+              <li><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3v4M16 3v4M4 10h16" /></svg>Monday review replaces the weekly deck</li>
+              <li><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><path d="M14 3v6h6M8 13h8M8 17h5" /></svg>Each department owns a north star</li>
+              <li><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>Blockers should become explicit asks</li>
+            </ul>
+            <button class="link-button" type="button">View all updates <span aria-hidden="true">-></span></button>
+          </article>
+        </section>
+
+        <section class="north-star">
+          <div>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="m15 9-2 5-5 2 2-5z" /></svg>
+            <strong id="northStarTeam">Research - North Star Goal</strong>
+          </div>
+          <input id="northStarInput" aria-label="Team north star goal" value="Turn model progress into audible product advantages that creators can reliably feel." />
+          <button type="button" id="saveGoal">
+            <svg viewBox="0 0 24 24"><path d="m12 20 9-9-4-4-9 9-2 6zM16 7l1-1a2.8 2.8 0 0 1 4 4l-1 1" /></svg>
+            Edit goal
+          </button>
+        </section>
+
+        <section class="board" aria-label="Weekly product review board">
+          <article class="lane" data-lane="did">
+            <header>
+              <h2><span class="status-icon done"></span>Did Last Week</h2>
+              <span class="count" id="didCount">4</span>
+            </header>
+            <div class="items" id="didItems"></div>
+            <button class="add-row" type="button" data-add="did">+ Add item</button>
+          </article>
+          <article class="lane" data-lane="doing">
+            <header>
+              <h2><span class="status-icon doing"></span>Doing This Week</h2>
+              <span class="count" id="doingCount">4</span>
+            </header>
+            <div class="items" id="doingItems"></div>
+            <button class="add-row" type="button" data-add="doing">+ Add item</button>
+          </article>
+          <article class="lane" data-lane="blocked">
+            <header>
+              <h2><span class="status-icon blocked"></span>Blocked</h2>
+              <span class="count" id="blockedCount">2</span>
+            </header>
+            <div class="items" id="blockedItems"></div>
+            <button class="add-row" type="button" data-add="blocked">+ Add blocker</button>
+          </article>
+          <article class="lane mvp-lane" data-lane="mvps" id="mvps">
+            <header>
+              <h2><span class="status-icon mvp"></span>MVPs Shipped</h2>
+              <span class="count" id="mvpsCount">3</span>
+            </header>
+            <div class="items" id="mvpsItems"></div>
+            <button class="add-row" type="button" data-add="mvps">+ Add MVP</button>
+          </article>
+        </section>
+
+        <section class="history-panel" id="history" aria-label="Canonical record history">
+          <header>
+            <h2>
+              <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v6h6M12 7v6l4 2" /></svg>
+              Canonical Record / History
+            </h2>
+            <button type="button" id="saveSnapshot">Save this week</button>
+          </header>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Week of</th>
+                  <th>Team North Star</th>
+                  <th>Highlights</th>
+                  <th>MVPs</th>
+                  <th>Blocked</th>
+                  <th>Owner</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody id="historyRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="updateDialog">
+      <form method="dialog" class="dialog-card">
+        <header>
+          <h2>Add team update</h2>
+          <button type="submit" value="cancel" aria-label="Close">
+            <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>
+        </header>
+        <label>
+          Section
+          <select id="newSection">
+            <option value="did">Did Last Week</option>
+            <option value="doing">Doing This Week</option>
+            <option value="blocked">Blocked</option>
+            <option value="mvps">MVPs Shipped</option>
+          </select>
+        </label>
+        <label>
+          Title
+          <input id="newTitle" type="text" placeholder="Short canonical update" />
+        </label>
+        <label>
+          Detail
+          <input id="newDetail" type="text" placeholder="Context, outcome, or next step" />
+        </label>
+        <label>
+          Owner initials
+          <input id="newOwner" type="text" maxlength="3" placeholder="DS" />
+        </label>
+        <footer>
+          <button type="submit" value="cancel">Cancel</button>
+          <button class="primary-action" id="createUpdate" value="default">Add update</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <section class="presentation" id="presentation" aria-label="Presentation mode" hidden>
+      <header class="presentation-toolbar">
+        <div>
+          <strong>Stability Monday Product Review</strong>
+          <span id="presentationWeek">Week of May 12, 2025 - May 18, 2025</span>
+        </div>
+        <div class="presentation-controls">
+          <button type="button" id="prevSlide" aria-label="Previous slide">
+            <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></svg>
+          </button>
+          <span id="slideCount">1 / 4</span>
+          <button type="button" id="nextSlide" aria-label="Next slide">
+            <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></svg>
+          </button>
+          <button type="button" id="exitPresentation">
+            <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" /></svg>
+            Exit
+          </button>
+        </div>
+      </header>
+      <div class="presentation-stage" id="presentationStage"></div>
+    </section>
+
+    <script src="app.js"></script>
+  </body>
+</html>
