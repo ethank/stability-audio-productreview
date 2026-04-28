@@ -37,7 +37,7 @@ Both views read from the same canonical weekly review payload.
 1. Create a Railway project from this repo.
 2. Add a Railway Postgres service.
 3. Make sure the web service receives `DATABASE_URL`.
-4. Optional: set `REVIEW_PASSWORD` to enable browser Basic Auth.
+4. Optional: set `REVIEW_USERNAME`, `REVIEW_PASSWORD`, and `SESSION_SECRET` to enable sign-in.
 5. Deploy with the included `railway.json`.
 
 Railway will run:
@@ -57,6 +57,32 @@ Health check:
 ```txt
 /healthz
 ```
+
+## Authentication
+
+When no review users are configured, the app runs open for local development.
+
+For a simple private deployment, set:
+
+```txt
+REVIEW_USERNAME=ethan
+REVIEW_PASSWORD=your-password
+SESSION_SECRET=a-long-random-string
+```
+
+For multiple users, set `REVIEW_USERS` to a JSON object:
+
+```json
+{"ethan":"password-one","zach":"password-two"}
+```
+
+For hashed passwords, generate a hash locally and store it in `REVIEW_PASSWORD_HASH` or as a `REVIEW_USERS` value:
+
+```bash
+npm run hash-password -- "your-password"
+```
+
+Sessions are signed HTTP-only cookies. `SESSION_TTL_SECONDS` defaults to 7 days.
 
 ## API
 

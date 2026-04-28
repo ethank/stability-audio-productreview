@@ -9,6 +9,11 @@ const HOST = process.env.HOST || "0.0.0.0";
 const ROOT = __dirname;
 const DATA_FILE = path.join(ROOT, "data", "reviews.json");
 const REVIEW_PASSWORD = process.env.REVIEW_PASSWORD || "";
+const REVIEW_USERNAME = process.env.REVIEW_USERNAME || "ethan";
+const REVIEW_PASSWORD_HASH = process.env.REVIEW_PASSWORD_HASH || "";
+const SESSION_COOKIE = "stability_review_session";
+const SESSION_TTL_SECONDS = Number(process.env.SESSION_TTL_SECONDS || 60 * 60 * 24 * 7);
+const SESSION_SECRET = process.env.SESSION_SECRET || REVIEW_PASSWORD || REVIEW_PASSWORD_HASH || "local-dev-session-secret";
 const DB_CONNECTION_TIMEOUT_MS = Number(process.env.DB_CONNECTION_TIMEOUT_MS || 5000);
 
 const MIME_TYPES = {
@@ -252,13 +257,23 @@ function isValidWeekStart(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-async function readJsonBody(req) {
+async function readTextBody(req) {
   let body = "";
   for await (const chunk of req) {
     body += chunk;
     if (body.length > 1_000_000) throw Object.assign(new Error("Request body too large"), { status: 413 });
   }
+  return body;
+}
+
+async function readJsonBody(req) {
+  const body = await readTextBody(req);
   return body ? JSON.parse(body) : {};
+}
+
+async function readFormBody(req) {
+  const body = await readTextBody(req);
+  return Object.fromEntries(new URLSearchParams(body));
 }
 
 function sendJson(res, status, payload) {
@@ -273,14 +288,266 @@ function sendError(res, status, message) {
   sendJson(res, status, { error: message });
 }
 
-function isAuthorized(req) {
-  if (!REVIEW_PASSWORD) return true;
-  const header = req.headers.authorization || "";
-  if (!header.startsWith("Basic ")) return false;
-  const decoded = Buffer.from(header.slice("Basic ".length), "base64").toString("utf8");
-  const [, password = ""] = decoded.split(":");
-  if (Buffer.byteLength(password) !== Buffer.byteLength(REVIEW_PASSWORD)) return false;
-  return crypto.timingSafeEqual(Buffer.from(password), Buffer.from(REVIEW_PASSWORD));
+function sendHtml(res, status, html, headers = {}) {
+  res.writeHead(status, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+    ...headers,
+  });
+  res.end(html);
+}
+
+function redirect(res, location, headers = {}) {
+  res.writeHead(302, { Location: location, "Cache-Control": "no-store", ...headers });
+  res.end();
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function loadReviewUsers() {
+  const users = {};
+  if (process.env.REVIEW_USERS) {
+    let parsed;
+    try {
+      parsed = JSON.parse(process.env.REVIEW_USERS);
+    } catch {
+      throw new Error("REVIEW_USERS must be a JSON object like {\"ethan\":\"password\"}");
+    }
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+      throw new Error("REVIEW_USERS must be a JSON object like {\"ethan\":\"password\"}");
+    }
+    Object.entries(parsed).forEach(([username, password]) => {
+      if (typeof username === "string" && typeof password === "string" && username && password) {
+        users[username] = password;
+      }
+    });
+  }
+
+  if (REVIEW_PASSWORD) users[REVIEW_USERNAME] = REVIEW_PASSWORD;
+  if (REVIEW_PASSWORD_HASH) users[REVIEW_USERNAME] = REVIEW_PASSWORD_HASH;
+  return users;
+}
+
+const REVIEW_USERS = loadReviewUsers();
+const AUTH_ENABLED = Object.keys(REVIEW_USERS).length > 0;
+
+function timingSafeEqualString(actual, expected) {
+  const actualBuffer = Buffer.from(actual);
+  const expectedBuffer = Buffer.from(expected);
+  if (actualBuffer.length !== expectedBuffer.length) return false;
+  return crypto.timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
+function verifyPassword(input, stored) {
+  if (!stored) return false;
+  if (stored.startsWith("scrypt$")) {
+    const [, salt, expected] = stored.split("$");
+    if (!salt || !expected) return false;
+    const expectedBuffer = Buffer.from(expected, "base64url");
+    const actualBuffer = crypto.scryptSync(input, Buffer.from(salt, "base64url"), expectedBuffer.length);
+    return crypto.timingSafeEqual(actualBuffer, expectedBuffer);
+  }
+  return timingSafeEqualString(input, stored);
+}
+
+function parseCookies(req) {
+  const cookies = {};
+  const header = req.headers.cookie || "";
+  header.split(";").forEach((pair) => {
+    const index = pair.indexOf("=");
+    if (index === -1) return;
+    const key = pair.slice(0, index).trim();
+    const value = pair.slice(index + 1).trim();
+    if (key) cookies[key] = decodeURIComponent(value);
+  });
+  return cookies;
+}
+
+function sign(value) {
+  return crypto.createHmac("sha256", SESSION_SECRET).update(value).digest("base64url");
+}
+
+function createSessionToken(username) {
+  const payload = Buffer.from(
+    JSON.stringify({
+      sub: username,
+      exp: Date.now() + SESSION_TTL_SECONDS * 1000,
+    }),
+  ).toString("base64url");
+  return `${payload}.${sign(payload)}`;
+}
+
+function readSessionToken(token) {
+  const [payload, signature] = String(token || "").split(".");
+  if (!payload || !signature || !timingSafeEqualString(signature, sign(payload))) return null;
+  try {
+    const session = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    if (!session.sub || !session.exp || session.exp < Date.now()) return null;
+    return session.sub;
+  } catch {
+    return null;
+  }
+}
+
+function sessionCookie(token, maxAge = SESSION_TTL_SECONDS) {
+  const parts = [
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    `Max-Age=${maxAge}`,
+  ];
+  if (process.env.NODE_ENV === "production" || process.env.RAILWAY_ENVIRONMENT) parts.push("Secure");
+  return parts.join("; ");
+}
+
+function currentUser(req) {
+  if (!AUTH_ENABLED) return { username: "local", authDisabled: true };
+  const username = readSessionToken(parseCookies(req)[SESSION_COOKIE]);
+  return username && REVIEW_USERS[username] ? { username } : null;
+}
+
+function isApiRequest(pathname) {
+  return pathname.startsWith("/api/");
+}
+
+function loginPage({ error = "", next = "/" } = {}) {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign in - Stability Product Review</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f4ef;
+        --surface: #fffdf8;
+        --ink: #17211f;
+        --muted: #68716d;
+        --line: #ded8cc;
+        --teal: #166a64;
+        --red: #b8483b;
+        --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--font);
+      }
+      main {
+        width: min(100%, 420px);
+        padding: 28px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: 0 14px 34px rgba(38, 31, 19, 0.08);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 28px;
+        font-weight: 780;
+      }
+      svg {
+        width: 24px;
+        height: 24px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.8;
+        color: var(--teal);
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 26px;
+        line-height: 1.08;
+      }
+      p {
+        margin: 0 0 22px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      label {
+        display: grid;
+        gap: 7px;
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 760;
+        text-transform: uppercase;
+      }
+      input {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fff;
+        color: var(--ink);
+        font: inherit;
+        padding: 10px 12px;
+      }
+      button {
+        width: 100%;
+        min-height: 46px;
+        margin-top: 22px;
+        border: 1px solid #0f544f;
+        border-radius: 7px;
+        background: var(--teal);
+        color: #fff;
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .error {
+        margin: 16px 0 0;
+        padding: 10px 12px;
+        border: 1px solid #e2afa5;
+        border-radius: 7px;
+        background: #f8e7e2;
+        color: var(--red);
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4M8 6v12M12 3v18M16 7v10M20 10v4" /></svg>
+        <span>Stability Product Review</span>
+      </div>
+      <h1>Sign in</h1>
+      <p>Use your review account to open the canonical weekly record.</p>
+      ${error ? `<div class="error">${escapeHtml(error)}</div>` : ""}
+      <form method="post" action="/login">
+        <input type="hidden" name="next" value="${escapeHtml(next)}" />
+        <label>Username<input name="username" autocomplete="username" required autofocus /></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
+        <button type="submit">Sign in</button>
+      </form>
+    </main>
+  </body>
+</html>`;
+}
+
+function normalizeNextPath(value) {
+  if (!value || typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) return "/";
+  return value;
 }
 
 function databaseSslConfig() {
@@ -431,9 +698,48 @@ async function main() {
         return;
       }
 
-      if (!isAuthorized(req)) {
-        res.writeHead(401, { "WWW-Authenticate": 'Basic realm="Stability Product Review"', "Content-Type": "text/plain; charset=utf-8" });
-        res.end("Authentication required");
+      if (req.method === "GET" && pathname === "/login") {
+        const user = currentUser(req);
+        const next = normalizeNextPath(url.searchParams.get("next") || "/");
+        if (user) {
+          redirect(res, next);
+          return;
+        }
+        sendHtml(res, 200, loginPage({ next }));
+        return;
+      }
+
+      if (req.method === "POST" && pathname === "/login") {
+        const form = await readFormBody(req);
+        const username = String(form.username || "").trim();
+        const password = String(form.password || "");
+        const next = normalizeNextPath(form.next || "/");
+        if (REVIEW_USERS[username] && verifyPassword(password, REVIEW_USERS[username])) {
+          redirect(res, next, { "Set-Cookie": sessionCookie(createSessionToken(username)) });
+          return;
+        }
+        sendHtml(res, 401, loginPage({ error: "Username or password is incorrect.", next }));
+        return;
+      }
+
+      if (req.method === "POST" && pathname === "/logout") {
+        redirect(res, "/login", { "Set-Cookie": sessionCookie("", 0) });
+        return;
+      }
+
+      const user = currentUser(req);
+      if (!user) {
+        if (isApiRequest(pathname)) {
+          sendError(res, 401, "Authentication required");
+          return;
+        }
+        const next = encodeURIComponent(`${url.pathname}${url.search}`);
+        redirect(res, `/login?next=${next}`);
+        return;
+      }
+
+      if (req.method === "GET" && pathname === "/api/session") {
+        sendJson(res, 200, { username: user.username, authDisabled: Boolean(user.authDisabled) });
         return;
       }
 

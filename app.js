@@ -118,6 +118,7 @@ const startBlankWeekButton = document.querySelector("#startBlankWeek");
 const startFromPreviousWeekButton = document.querySelector("#startFromPreviousWeek");
 const markReadyButton = document.querySelector("#markReady");
 const lockWeekFromWorkflowButton = document.querySelector("#lockWeekFromWorkflow");
+const logoutButton = document.querySelector("#logoutButton");
 
 const VIEW_TITLES = {
   review: "Monday Review",
@@ -218,6 +219,16 @@ function updateWeekUrl() {
   url.searchParams.set("week", review.weekStart);
   url.hash = activeView;
   window.history.replaceState(null, "", url);
+}
+
+async function appFetch(input, init) {
+  const response = await fetch(input, init);
+  if (response.status === 401 && window.location.protocol !== "file:") {
+    const next = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    window.location.href = `/login?next=${encodeURIComponent(next)}`;
+    throw new Error("Authentication required");
+  }
+  return response;
 }
 
 function allItems(lane) {
@@ -767,7 +778,7 @@ async function loadReview(targetWeekStart = null, options = {}) {
   if (options.rollover) params.set("rollover", "1");
   if (options.emptyIfSeed) params.set("emptyIfSeed", "1");
   const query = params.toString();
-  const response = await fetch(targetWeekStart ? `/api/reviews/${targetWeekStart}${query ? `?${query}` : ""}` : "/api/reviews/current");
+  const response = await appFetch(targetWeekStart ? `/api/reviews/${targetWeekStart}${query ? `?${query}` : ""}` : "/api/reviews/current");
   if (!response.ok) throw new Error(`Could not load review: ${response.status}`);
   review = normalizeReview(await response.json());
   weekStart = parseDateOnly(review.weekStart);
@@ -806,7 +817,7 @@ async function saveReview() {
     return;
   }
 
-  const response = await fetch(`/api/reviews/${review.weekStart}`, {
+  const response = await appFetch(`/api/reviews/${review.weekStart}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(review),
@@ -851,7 +862,7 @@ async function startBlankWeek() {
 async function previousWeekReview() {
   const previousWeekStart = addDaysISO(review.weekStart, -7);
   if (window.location.protocol === "file:") return localReviewForWeek(previousWeekStart, { emptyIfSeed: true });
-  const response = await fetch(`/api/reviews/${previousWeekStart}?emptyIfSeed=1`);
+  const response = await appFetch(`/api/reviews/${previousWeekStart}?emptyIfSeed=1`);
   if (!response.ok) throw new Error(`Could not load previous week: ${response.status}`);
   return normalizeReview(await response.json());
 }
@@ -890,7 +901,7 @@ async function lockReview() {
     return;
   }
 
-  const response = await fetch(`/api/reviews/${review.weekStart}/lock`, { method: "POST" });
+  const response = await appFetch(`/api/reviews/${review.weekStart}/lock`, { method: "POST" });
   if (!response.ok) throw new Error(`Could not lock review: ${response.status}`);
   review = normalizeReview(await response.json());
   saveState = "Locked";
@@ -968,6 +979,11 @@ headUpdateLong.addEventListener("input", () => {
 document.querySelector("#openUpdate").addEventListener("click", () => dialog.showModal());
 document.querySelector("#presentMode").addEventListener("click", openPresentation);
 document.querySelector("#exportReview").addEventListener("click", exportReview);
+logoutButton.addEventListener("click", () => {
+  fetch("/logout", { method: "POST" }).finally(() => {
+    window.location.href = "/login";
+  });
+});
 document.querySelector("#exitPresentation").addEventListener("click", closePresentation);
 document.querySelector("#prevSlide").addEventListener("click", () => changeSlide(-1));
 document.querySelector("#nextSlide").addEventListener("click", () => changeSlide(1));
