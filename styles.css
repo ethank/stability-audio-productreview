@@ -975,6 +975,10 @@ h1 svg {
   grid-template-columns: minmax(280px, 0.7fr) minmax(620px, 1.3fr);
 }
 
+#usersPanel {
+  grid-column: 1 / -1;
+}
+
 .editor-panel {
   min-width: 0;
   padding: 14px;
