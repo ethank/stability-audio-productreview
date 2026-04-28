@@ -268,11 +268,14 @@ svg {
 
 .profile {
   display: grid;
-  grid-template-columns: 34px 1fr 18px;
-  gap: 9px;
+  grid-template-columns: 42px minmax(0, 1fr) 18px;
+  grid-template-rows: min-content min-content;
+  column-gap: 12px;
+  row-gap: 2px;
   align-items: center;
+  min-height: 68px;
   margin-top: auto;
-  padding: 10px 8px;
+  padding: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
@@ -280,11 +283,13 @@ svg {
 }
 
 .profile > span {
-  grid-row: span 2;
-  width: 34px;
-  height: 34px;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  width: 42px;
+  height: 42px;
   background: var(--gold-soft);
   color: #7d4e0b;
+  font-size: 14px;
 }
 
 .presentation[hidden] {
@@ -550,16 +555,33 @@ svg {
 }
 
 .profile strong {
-  font-size: 13px;
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .profile small {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  overflow: hidden;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .profile svg {
-  grid-row: span 2;
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  justify-self: end;
   color: var(--soft);
 }
 
