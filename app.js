@@ -85,19 +85,58 @@ let weekStart = parseDateOnly(review.weekStart);
 let currentSlide = 0;
 let saveTimer = null;
 let saveState = "Local fallback";
+let activeView = viewFromHash();
 
 const teamList = document.querySelector("#teamList");
 const weekLabel = document.querySelector("#weekLabel");
 const northStarTeam = document.querySelector("#northStarTeam");
 const northStarInput = document.querySelector("#northStarInput");
 const historyRows = document.querySelector("#historyRows");
+const historyDetailRows = document.querySelector("#historyDetailRows");
 const dialog = document.querySelector("#updateDialog");
 const presentation = document.querySelector("#presentation");
 const presentationStage = document.querySelector("#presentationStage");
 const presentationWeek = document.querySelector("#presentationWeek");
 const slideCount = document.querySelector("#slideCount");
 const headUpdate = document.querySelector("#headUpdate");
+const headUpdateLong = document.querySelector("#headUpdateLong");
 const saveStateLabel = document.querySelector("#saveState");
+const pageTitle = document.querySelector("#pageTitle");
+const updatesEditor = document.querySelector("#updatesEditor");
+const blockerSummary = document.querySelector("#blockerSummary");
+const mvpSummary = document.querySelector("#mvpSummary");
+const currentWeekFacts = document.querySelector("#currentWeekFacts");
+const departmentSettings = document.querySelector("#departmentSettings");
+const reviewTitleInput = document.querySelector("#reviewTitleInput");
+const reviewOwnerInput = document.querySelector("#reviewOwnerInput");
+const reviewStatusInput = document.querySelector("#reviewStatusInput");
+
+const VIEW_TITLES = {
+  review: "Monday Review",
+  updates: "Updates",
+  mvps: "MVPs",
+  history: "History",
+  settings: "Settings",
+};
+
+function viewFromHash() {
+  const view = window.location.hash.replace("#", "");
+  return ["review", "updates", "mvps", "history", "settings"].includes(view) ? view : "review";
+}
+
+function setActiveView(view = "review", push = true) {
+  activeView = VIEW_TITLES[view] ? view : "review";
+  document.querySelectorAll(".app-view").forEach((element) => {
+    element.hidden = element.dataset.view !== activeView;
+  });
+  document.querySelectorAll("[data-view-link]").forEach((link) => {
+    link.classList.toggle("active", link.dataset.viewLink === activeView);
+  });
+  if (pageTitle) pageTitle.textContent = VIEW_TITLES[activeView];
+  if (push && window.location.hash !== `#${activeView}`) {
+    window.history.replaceState(null, "", `#${activeView}`);
+  }
+}
 
 function createDefaultReview(week = currentMondayISO()) {
   return {
@@ -257,6 +296,116 @@ function renderHistory() {
   });
 }
 
+function renderUpdatesPage() {
+  headUpdateLong.value = review.departmentHeadUpdate;
+  updatesEditor.innerHTML = "";
+  review.teamWideUpdates.forEach((text, index) => {
+    const row = document.createElement("div");
+    row.className = "editable-row";
+    row.innerHTML = `
+      <span>${index + 1}</span>
+      <input type="text" value="${escapeHtml(text)}" data-update-index="${index}" aria-label="Team-wide update ${index + 1}" />
+      <button type="button" data-remove-update="${index}" aria-label="Remove update">
+        <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" /></svg>
+      </button>
+    `;
+    updatesEditor.append(row);
+  });
+
+  const blockers = allItems("blocked");
+  blockerSummary.innerHTML = blockers.length
+    ? blockers
+        .map(
+          ({ team, item }) => `
+            <article class="summary-row blocked-summary">
+              <span>${escapeHtml(team)}</span>
+              <strong>${escapeHtml(item[0])}</strong>
+              <small>${escapeHtml(item[1])}</small>
+            </article>
+          `,
+        )
+        .join("")
+    : '<article class="summary-row"><strong>No open blockers</strong><small>Status is clear for this record.</small></article>';
+}
+
+function renderMvpPage() {
+  mvpSummary.innerHTML = review.teams
+    .map((team) => {
+      const rows = team.mvps.length
+        ? team.mvps
+            .map(
+              ([title, detail, owner]) => `
+                <article class="mvp-card">
+                  <div>
+                    <span>${escapeHtml(owner)}</span>
+                    <strong>${escapeHtml(title)}</strong>
+                    <small>${escapeHtml(detail)}</small>
+                  </div>
+                  <button type="button" data-select-team="${escapeHtml(team.id)}">Open</button>
+                </article>
+              `,
+            )
+            .join("")
+        : '<article class="mvp-card empty"><strong>No MVPs logged</strong><small>Add one before the weekly review closes.</small></article>';
+      return `
+        <section class="mvp-team">
+          <header>
+            <div>
+              <h3>${escapeHtml(team.name)}</h3>
+              <p>${escapeHtml(team.northStar)}</p>
+            </div>
+            <span>${team.mvps.length}</span>
+          </header>
+          <div>${rows}</div>
+        </section>
+      `;
+    })
+    .join("");
+}
+
+function renderHistoryPage() {
+  const mvpCount = allItems("mvps").length;
+  const blockerCount = allItems("blocked").length;
+  currentWeekFacts.innerHTML = `
+    <div><dt>Week</dt><dd>${escapeHtml(formatDate(weekStart))}</dd></div>
+    <div><dt>Status</dt><dd>${escapeHtml(review.status || "draft")}</dd></div>
+    <div><dt>Departments</dt><dd>${review.teams.length}</dd></div>
+    <div><dt>MVPs</dt><dd>${mvpCount}</dd></div>
+    <div><dt>Blockers</dt><dd>${blockerCount}</dd></div>
+    <div><dt>Owner</dt><dd>${escapeHtml(review.updatedBy || "Ethan")}</dd></div>
+  `;
+
+  historyDetailRows.innerHTML = "";
+  review.history.forEach((row) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("");
+    historyDetailRows.append(tr);
+  });
+}
+
+function renderSettingsPage() {
+  reviewTitleInput.value = review.title;
+  reviewOwnerInput.value = review.updatedBy || "Ethan";
+  reviewStatusInput.value = review.status || "draft";
+  departmentSettings.innerHTML = review.teams
+    .map(
+      (team, index) => `
+        <section class="department-editor">
+          <div class="department-editor-title">
+            <span class="team-avatar">${escapeHtml(team.initials)}</span>
+            <strong>${escapeHtml(team.name)}</strong>
+          </div>
+          <label>Name<input type="text" value="${escapeHtml(team.name)}" data-team-index="${index}" data-team-field="name" /></label>
+          <label>Initials<input type="text" value="${escapeHtml(team.initials)}" maxlength="4" data-team-index="${index}" data-team-field="initials" /></label>
+          <label>Owner<input type="text" value="${escapeHtml(team.owner)}" data-team-index="${index}" data-team-field="owner" /></label>
+          <label>Members<input type="text" value="${escapeHtml(team.members)}" data-team-index="${index}" data-team-field="members" /></label>
+          <label class="wide-field">North star<textarea data-team-index="${index}" data-team-field="northStar">${escapeHtml(team.northStar)}</textarea></label>
+        </section>
+      `,
+    )
+    .join("");
+}
+
 function renderApp() {
   const team = selectedTeam();
   renderTeams();
@@ -264,9 +413,15 @@ function renderApp() {
   renderHistory();
   renderTeamWideUpdates();
   headUpdate.value = review.departmentHeadUpdate;
+  headUpdateLong.value = review.departmentHeadUpdate;
   northStarTeam.textContent = `${team.name} - North Star Goal`;
   northStarInput.value = team.northStar;
   ["did", "doing", "blocked", "mvps"].forEach((lane) => renderLane(team, lane));
+  renderUpdatesPage();
+  renderMvpPage();
+  renderHistoryPage();
+  renderSettingsPage();
+  setActiveView(activeView, false);
   saveStateLabel.textContent = saveState;
   if (!presentation.hidden) renderPresentation();
 }
@@ -405,7 +560,7 @@ function scheduleSave() {
 async function saveReview() {
   review.departmentHeadUpdate = headUpdate.value;
   review.weekStart = dateOnly(weekStart);
-  review.updatedBy = "Ethan";
+  review.updatedBy = review.updatedBy || "Ethan";
 
   if (window.location.protocol === "file:") {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(review));
@@ -430,6 +585,69 @@ function mutateReview(callback) {
   renderApp();
   scheduleSave();
 }
+
+function saveSnapshot() {
+  const team = selectedTeam();
+  mutateReview(() => {
+    review.history.unshift([
+      formatDate(weekStart),
+      team.northStar,
+      `${team.did.length} completed, ${team.doing.length} active`,
+      team.mvps.length,
+      team.blocked.length,
+      review.updatedBy || "Ethan",
+      "Just now",
+    ]);
+  });
+}
+
+async function lockReview() {
+  review.status = "locked";
+  review.lockedAt = new Date().toISOString();
+  renderApp();
+  saveState = "Locking...";
+  saveStateLabel.textContent = saveState;
+
+  if (window.location.protocol === "file:") {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(review));
+    saveState = "Locked locally";
+    saveStateLabel.textContent = saveState;
+    renderApp();
+    return;
+  }
+
+  const response = await fetch(`/api/reviews/${review.weekStart}/lock`, { method: "POST" });
+  if (!response.ok) throw new Error(`Could not lock review: ${response.status}`);
+  review = normalizeReview(await response.json());
+  saveState = "Locked";
+  saveStateLabel.textContent = saveState;
+  renderApp();
+}
+
+function exportReview() {
+  const blob = new Blob([JSON.stringify(review, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `stability-review-${review.weekStart}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+document.querySelectorAll("[data-view-link]").forEach((link) => {
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    setActiveView(link.dataset.viewLink);
+  });
+});
+
+document.querySelectorAll("[data-open-view]").forEach((button) => {
+  button.addEventListener("click", () => setActiveView(button.dataset.openView));
+});
+
+window.addEventListener("hashchange", () => setActiveView(viewFromHash(), false));
 
 document.querySelector("#prevWeek").addEventListener("click", () => {
   mutateReview(() => {
@@ -460,14 +678,55 @@ northStarInput.addEventListener("input", () => {
 
 headUpdate.addEventListener("input", () => {
   review.departmentHeadUpdate = headUpdate.value;
+  headUpdateLong.value = review.departmentHeadUpdate;
+  scheduleSave();
+});
+
+headUpdateLong.addEventListener("input", () => {
+  review.departmentHeadUpdate = headUpdateLong.value;
+  headUpdate.value = review.departmentHeadUpdate;
   scheduleSave();
 });
 
 document.querySelector("#openUpdate").addEventListener("click", () => dialog.showModal());
 document.querySelector("#presentMode").addEventListener("click", openPresentation);
+document.querySelector("#exportReview").addEventListener("click", exportReview);
 document.querySelector("#exitPresentation").addEventListener("click", closePresentation);
 document.querySelector("#prevSlide").addEventListener("click", () => changeSlide(-1));
 document.querySelector("#nextSlide").addEventListener("click", () => changeSlide(1));
+document.querySelector("#addTeamWideUpdate").addEventListener("click", () => {
+  mutateReview(() => review.teamWideUpdates.push("New team-wide update"));
+});
+document.querySelector("#addMvpFromView").addEventListener("click", () => {
+  document.querySelector("#newSection").value = "mvps";
+  dialog.showModal();
+});
+document.querySelector("#saveSnapshotFromHistory").addEventListener("click", saveSnapshot);
+document.querySelector("#lockReview").addEventListener("click", () => {
+  lockReview().catch((error) => {
+    console.error(error);
+    saveState = "Lock failed";
+    saveStateLabel.textContent = saveState;
+  });
+});
+document.querySelector("#addDepartment").addEventListener("click", () => {
+  const id = `department-${Date.now()}`;
+  mutateReview(() => {
+    review.teams.push({
+      id,
+      name: "New Department",
+      initials: "ND",
+      northStar: "Define the orientation goal for this department.",
+      owner: review.updatedBy || "Ethan",
+      members: "Unassigned",
+      did: [],
+      doing: [],
+      blocked: [],
+      mvps: [],
+    });
+    selectedTeamId = id;
+  });
+});
 
 document.addEventListener("keydown", (event) => {
   if (presentation.hidden) return;
@@ -500,19 +759,52 @@ document.querySelector("#createUpdate").addEventListener("click", (event) => {
   });
 });
 
-document.querySelector("#saveSnapshot").addEventListener("click", () => {
-  const team = selectedTeam();
-  mutateReview(() => {
-    review.history.unshift([
-      formatDate(weekStart),
-      team.northStar,
-      `${team.did.length} completed, ${team.doing.length} active`,
-      team.mvps.length,
-      team.blocked.length,
-      "Ethan",
-      "Just now",
-    ]);
-  });
+document.querySelector("#saveSnapshot").addEventListener("click", saveSnapshot);
+
+updatesEditor.addEventListener("input", (event) => {
+  const index = Number(event.target.dataset.updateIndex);
+  if (!Number.isInteger(index)) return;
+  review.teamWideUpdates[index] = event.target.value;
+  renderTeamWideUpdates();
+  scheduleSave();
+});
+
+updatesEditor.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-remove-update]");
+  if (!button) return;
+  mutateReview(() => review.teamWideUpdates.splice(Number(button.dataset.removeUpdate), 1));
+});
+
+mvpSummary.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-select-team]");
+  if (!button) return;
+  selectedTeamId = button.dataset.selectTeam;
+  setActiveView("review");
+  renderApp();
+});
+
+reviewTitleInput.addEventListener("input", () => {
+  review.title = reviewTitleInput.value;
+  scheduleSave();
+});
+
+reviewOwnerInput.addEventListener("input", () => {
+  review.updatedBy = reviewOwnerInput.value;
+  scheduleSave();
+});
+
+departmentSettings.addEventListener("input", (event) => {
+  const index = Number(event.target.dataset.teamIndex);
+  const field = event.target.dataset.teamField;
+  if (!Number.isInteger(index) || !field || !review.teams[index]) return;
+  review.teams[index][field] = event.target.value;
+  if (field === "name" || field === "initials" || field === "members" || field === "northStar") {
+    renderTeams();
+    const team = selectedTeam();
+    northStarTeam.textContent = `${team.name} - North Star Goal`;
+    northStarInput.value = team.northStar;
+  }
+  scheduleSave();
 });
 
 loadReview()

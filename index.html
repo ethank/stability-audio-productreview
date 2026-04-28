@@ -32,23 +32,23 @@
         </div>
 
         <nav class="primary-nav" aria-label="Review navigation">
-          <a class="active" href="#review">
+          <a class="active" href="#review" data-view-link="review">
             <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3v4M16 3v4M4 10h16" /></svg>
             Monday Review
           </a>
-          <a href="#updates">
+          <a href="#updates" data-view-link="updates">
             <svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" /></svg>
             Updates
           </a>
-          <a href="#mvps">
+          <a href="#mvps" data-view-link="mvps">
             <svg viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z" /></svg>
             MVPs
           </a>
-          <a href="#history">
+          <a href="#history" data-view-link="history">
             <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v6h6M12 7v6l4 2" /></svg>
             History
           </a>
-          <a href="#settings">
+          <a href="#settings" data-view-link="settings">
             <svg viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z" /><path d="m19.4 15 1.2 2.1-2.1 3.6-2.5-1a8.6 8.6 0 0 1-2.4 1.4L13.2 24H9l-.4-2.9a8.6 8.6 0 0 1-2.4-1.4l-2.5 1-2.1-3.6L2.8 15a8.2 8.2 0 0 1 0-2.8L1.6 10 3.7 6.4l2.5 1A8.6 8.6 0 0 1 8.6 6L9 3.2h4.2l.4 2.8A8.6 8.6 0 0 1 16 7.4l2.5-1 2.1 3.6-1.2 2.2a8.2 8.2 0 0 1 0 2.8z" /></svg>
             Settings
           </a>
@@ -70,7 +70,7 @@
                 <rect x="4" y="5" width="16" height="15" rx="2" />
                 <path d="M8 3v4M16 3v4M4 10h16" />
               </svg>
-              Monday Review
+              <span id="pageTitle">Monday Review</span>
             </h1>
             <div class="week-controls" aria-label="Review week controls">
               <button type="button" id="prevWeek" aria-label="Previous week">
@@ -93,7 +93,7 @@
               <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></svg>
               Present
             </button>
-            <button type="button" aria-label="Export record">
+            <button type="button" aria-label="Export record" id="exportReview">
               <svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14" /></svg>
             </button>
             <button type="button" aria-label="More actions">
@@ -102,7 +102,7 @@
           </div>
         </header>
 
-        <section class="overview-grid" aria-label="Department overview">
+        <section class="overview-grid app-view" data-view="review" aria-label="Department overview">
           <article class="overview-card metrics-card">
             <h2>
               <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.9" /></svg>
@@ -119,7 +119,7 @@
             <h2>Department Head Update</h2>
             <textarea id="headUpdate" aria-label="Department head update">This week's review is focused on turning Stability Audio progress into a canonical operating record: what moved, what is next, what needs escalation, and which MVPs matter most. Keep updates concrete enough to share live without rebuilding a deck.</textarea>
           </article>
-          <article class="overview-card team-wide" id="updates">
+          <article class="overview-card team-wide" id="updatesCard">
             <h2>
               <svg viewBox="0 0 24 24"><path d="M4 14h4l8 5V5L8 10H4zM18 9a4 4 0 0 1 0 6" /></svg>
               Team-wide Updates
@@ -129,11 +129,11 @@
               <li><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><path d="M14 3v6h6M8 13h8M8 17h5" /></svg>Each department owns a north star</li>
               <li><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>Blockers should become explicit asks</li>
             </ul>
-            <button class="link-button" type="button">View all updates <span aria-hidden="true">-></span></button>
+            <button class="link-button" type="button" data-open-view="updates">View all updates <span aria-hidden="true">-></span></button>
           </article>
         </section>
 
-        <section class="north-star">
+        <section class="north-star app-view" data-view="review">
           <div>
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="m15 9-2 5-5 2 2-5z" /></svg>
             <strong id="northStarTeam">Research - North Star Goal</strong>
@@ -145,7 +145,7 @@
           </button>
         </section>
 
-        <section class="board" aria-label="Weekly product review board">
+        <section class="board app-view" data-view="review" aria-label="Weekly product review board">
           <article class="lane" data-lane="did">
             <header>
               <h2><span class="status-icon done"></span>Did Last Week</h2>
@@ -170,7 +170,7 @@
             <div class="items" id="blockedItems"></div>
             <button class="add-row" type="button" data-add="blocked">+ Add blocker</button>
           </article>
-          <article class="lane mvp-lane" data-lane="mvps" id="mvps">
+          <article class="lane mvp-lane" data-lane="mvps" id="mvpsLane">
             <header>
               <h2><span class="status-icon mvp"></span>MVPs Shipped</h2>
               <span class="count" id="mvpsCount">3</span>
@@ -180,7 +180,7 @@
           </article>
         </section>
 
-        <section class="history-panel" id="history" aria-label="Canonical record history">
+        <section class="history-panel app-view" data-view="review" aria-label="Canonical record history">
           <header>
             <h2>
               <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v6h6M12 7v6l4 2" /></svg>
@@ -203,6 +203,113 @@
               </thead>
               <tbody id="historyRows"></tbody>
             </table>
+          </div>
+        </section>
+
+        <section class="workspace-panel app-view" id="updatesView" data-view="updates" hidden>
+          <header>
+            <div>
+              <h2>
+                <svg viewBox="0 0 24 24"><path d="M4 14h4l8 5V5L8 10H4zM18 9a4 4 0 0 1 0 6" /></svg>
+                Updates
+              </h2>
+              <p>Dept-head notes and team-wide announcements that should survive the meeting.</p>
+            </div>
+            <button type="button" id="addTeamWideUpdate">Add update</button>
+          </header>
+          <div class="workspace-grid">
+            <article class="editor-panel wide">
+              <h3>Department Head Overview</h3>
+              <textarea id="headUpdateLong" aria-label="Department head overview"></textarea>
+            </article>
+            <article class="editor-panel">
+              <h3>Team-wide Updates</h3>
+              <div class="editable-list" id="updatesEditor"></div>
+            </article>
+            <article class="editor-panel">
+              <h3>Open Blockers</h3>
+              <div class="summary-list" id="blockerSummary"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="workspace-panel app-view" id="mvpsView" data-view="mvps" hidden>
+          <header>
+            <div>
+              <h2>
+                <svg viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z" /></svg>
+                MVPs
+              </h2>
+              <p>Everything the team is calling an MVP this week, grouped by department.</p>
+            </div>
+            <button type="button" id="addMvpFromView">Add MVP</button>
+          </header>
+          <div class="mvp-summary" id="mvpSummary"></div>
+        </section>
+
+        <section class="workspace-panel app-view" id="historyView" data-view="history" hidden>
+          <header>
+            <div>
+              <h2>
+                <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v6h6M12 7v6l4 2" /></svg>
+                History
+              </h2>
+              <p>Canonical weekly records and review snapshots.</p>
+            </div>
+            <div class="header-actions">
+              <button type="button" id="saveSnapshotFromHistory">Save snapshot</button>
+              <button type="button" id="lockReview">Lock week</button>
+            </div>
+          </header>
+          <div class="history-detail">
+            <article class="editor-panel">
+              <h3>Current Week</h3>
+              <dl class="record-facts" id="currentWeekFacts"></dl>
+            </article>
+            <article class="editor-panel wide">
+              <h3>Past Snapshots</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Week of</th>
+                      <th>North Star</th>
+                      <th>Highlights</th>
+                      <th>MVPs</th>
+                      <th>Blocked</th>
+                      <th>Owner</th>
+                      <th>Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody id="historyDetailRows"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="workspace-panel app-view" id="settingsView" data-view="settings" hidden>
+          <header>
+            <div>
+              <h2>
+                <svg viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z" /><path d="m19.4 15 1.2 2.1-2.1 3.6-2.5-1a8.6 8.6 0 0 1-2.4 1.4L13.2 24H9l-.4-2.9a8.6 8.6 0 0 1-2.4-1.4l-2.5 1-2.1-3.6L2.8 15a8.2 8.2 0 0 1 0-2.8L1.6 10 3.7 6.4l2.5 1A8.6 8.6 0 0 1 8.6 6L9 3.2h4.2l.4 2.8A8.6 8.6 0 0 1 16 7.4l2.5-1 2.1 3.6-1.2 2.2a8.2 8.2 0 0 1 0 2.8z" /></svg>
+                Settings
+              </h2>
+              <p>Department roster, north stars, and record metadata.</p>
+            </div>
+            <button type="button" id="addDepartment">Add department</button>
+          </header>
+          <div class="workspace-grid settings-layout">
+            <article class="editor-panel">
+              <h3>Review Metadata</h3>
+              <label>Title<input id="reviewTitleInput" type="text" /></label>
+              <label>Record owner<input id="reviewOwnerInput" type="text" /></label>
+              <label>Status<input id="reviewStatusInput" type="text" disabled /></label>
+            </article>
+            <article class="editor-panel wide">
+              <h3>Departments</h3>
+              <div class="department-settings" id="departmentSettings"></div>
+            </article>
           </div>
         </section>
       </main>
