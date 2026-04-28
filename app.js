@@ -980,9 +980,18 @@ document.querySelector("#openUpdate").addEventListener("click", () => dialog.sho
 document.querySelector("#presentMode").addEventListener("click", openPresentation);
 document.querySelector("#exportReview").addEventListener("click", exportReview);
 logoutButton.addEventListener("click", () => {
-  fetch("/logout", { method: "POST" }).finally(() => {
-    window.location.href = "/login";
-  });
+  fetch("/auth/csrf", { credentials: "same-origin" })
+    .then((response) => response.json())
+    .then(({ csrfToken }) =>
+      fetch("/auth/signout", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ csrfToken, callbackUrl: "/login" }),
+      }),
+    )
+    .finally(() => {
+      window.location.href = "/login";
+    });
 });
 document.querySelector("#exitPresentation").addEventListener("click", closePresentation);
 document.querySelector("#prevSlide").addEventListener("click", () => changeSlide(-1));

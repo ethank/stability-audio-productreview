@@ -1,7 +1,7 @@
-const http = require("http");
 const fs = require("fs/promises");
 const path = require("path");
 const crypto = require("crypto");
+const express = require("express");
 const { runMigrations } = require("./scripts/migrate");
 
 const PORT = Number(process.env.PORT || 3000);
@@ -11,19 +11,9 @@ const DATA_FILE = path.join(ROOT, "data", "reviews.json");
 const REVIEW_PASSWORD = process.env.REVIEW_PASSWORD || "";
 const REVIEW_USERNAME = process.env.REVIEW_USERNAME || "ethan";
 const REVIEW_PASSWORD_HASH = process.env.REVIEW_PASSWORD_HASH || "";
-const SESSION_COOKIE = "stability_review_session";
 const SESSION_TTL_SECONDS = Number(process.env.SESSION_TTL_SECONDS || 60 * 60 * 24 * 7);
-const SESSION_SECRET = process.env.SESSION_SECRET || REVIEW_PASSWORD || REVIEW_PASSWORD_HASH || "local-dev-session-secret";
+const AUTH_SECRET = process.env.AUTH_SECRET || process.env.SESSION_SECRET || REVIEW_PASSWORD || REVIEW_PASSWORD_HASH || "local-dev-auth-secret";
 const DB_CONNECTION_TIMEOUT_MS = Number(process.env.DB_CONNECTION_TIMEOUT_MS || 5000);
-
-const MIME_TYPES = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-};
 
 const DEFAULT_TEAMS = [
   {
@@ -257,25 +247,6 @@ function isValidWeekStart(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-async function readTextBody(req) {
-  let body = "";
-  for await (const chunk of req) {
-    body += chunk;
-    if (body.length > 1_000_000) throw Object.assign(new Error("Request body too large"), { status: 413 });
-  }
-  return body;
-}
-
-async function readJsonBody(req) {
-  const body = await readTextBody(req);
-  return body ? JSON.parse(body) : {};
-}
-
-async function readFormBody(req) {
-  const body = await readTextBody(req);
-  return Object.fromEntries(new URLSearchParams(body));
-}
-
 function sendJson(res, status, payload) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
@@ -355,63 +326,6 @@ function verifyPassword(input, stored) {
     return crypto.timingSafeEqual(actualBuffer, expectedBuffer);
   }
   return timingSafeEqualString(input, stored);
-}
-
-function parseCookies(req) {
-  const cookies = {};
-  const header = req.headers.cookie || "";
-  header.split(";").forEach((pair) => {
-    const index = pair.indexOf("=");
-    if (index === -1) return;
-    const key = pair.slice(0, index).trim();
-    const value = pair.slice(index + 1).trim();
-    if (key) cookies[key] = decodeURIComponent(value);
-  });
-  return cookies;
-}
-
-function sign(value) {
-  return crypto.createHmac("sha256", SESSION_SECRET).update(value).digest("base64url");
-}
-
-function createSessionToken(username) {
-  const payload = Buffer.from(
-    JSON.stringify({
-      sub: username,
-      exp: Date.now() + SESSION_TTL_SECONDS * 1000,
-    }),
-  ).toString("base64url");
-  return `${payload}.${sign(payload)}`;
-}
-
-function readSessionToken(token) {
-  const [payload, signature] = String(token || "").split(".");
-  if (!payload || !signature || !timingSafeEqualString(signature, sign(payload))) return null;
-  try {
-    const session = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-    if (!session.sub || !session.exp || session.exp < Date.now()) return null;
-    return session.sub;
-  } catch {
-    return null;
-  }
-}
-
-function sessionCookie(token, maxAge = SESSION_TTL_SECONDS) {
-  const parts = [
-    `${SESSION_COOKIE}=${encodeURIComponent(token)}`,
-    "Path=/",
-    "HttpOnly",
-    "SameSite=Lax",
-    `Max-Age=${maxAge}`,
-  ];
-  if (process.env.NODE_ENV === "production" || process.env.RAILWAY_ENVIRONMENT) parts.push("Secure");
-  return parts.join("; ");
-}
-
-function currentUser(req) {
-  if (!AUTH_ENABLED) return { username: "local", authDisabled: true };
-  const username = readSessionToken(parseCookies(req)[SESSION_COOKIE]);
-  return username && REVIEW_USERS[username] ? { username } : null;
 }
 
 function isApiRequest(pathname) {
@@ -534,13 +448,21 @@ function loginPage({ error = "", next = "/" } = {}) {
       <h1>Sign in</h1>
       <p>Use your review account to open the canonical weekly record.</p>
       ${error ? `<div class="error">${escapeHtml(error)}</div>` : ""}
-      <form method="post" action="/login">
-        <input type="hidden" name="next" value="${escapeHtml(next)}" />
+      <form method="post" action="/auth/callback/credentials">
+        <input type="hidden" name="csrfToken" id="csrfToken" />
+        <input type="hidden" name="callbackUrl" value="${escapeHtml(next)}" />
         <label>Username<input name="username" autocomplete="username" required autofocus /></label>
         <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
         <button type="submit">Sign in</button>
       </form>
     </main>
+    <script>
+      fetch("/auth/csrf", { credentials: "same-origin" })
+        .then((response) => response.json())
+        .then((data) => {
+          document.querySelector("#csrfToken").value = data.csrfToken || "";
+        });
+    </script>
   </body>
 </html>`;
 }
@@ -658,137 +580,178 @@ async function createStore() {
   };
 }
 
-async function serveStatic(req, res, pathname) {
-  const filePath = pathname === "/" || pathname === "/present" ? path.join(ROOT, "index.html") : path.join(ROOT, pathname);
-  const resolved = path.resolve(filePath);
-  if (!resolved.startsWith(ROOT)) {
-    sendError(res, 403, "Forbidden");
-    return;
-  }
-
-  try {
-    const stat = await fs.stat(resolved);
-    if (!stat.isFile()) throw Object.assign(new Error("Not found"), { code: "ENOENT" });
-    const ext = path.extname(resolved);
-    res.writeHead(200, {
-      "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
-      "Cache-Control": ext === ".html" ? "no-store" : "public, max-age=300",
-    });
-    res.end(await fs.readFile(resolved));
-  } catch (error) {
-    if (!path.extname(pathname)) {
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
-      res.end(await fs.readFile(path.join(ROOT, "index.html")));
-      return;
-    }
-    sendError(res, 404, "Not found");
-  }
-}
-
 async function main() {
+  const { ExpressAuth, getSession } = await import("@auth/express");
+  const Credentials = (await import("@auth/express/providers/credentials")).default;
   const store = await createStore();
 
-  const server = http.createServer(async (req, res) => {
+  const authConfig = {
+    trustHost: true,
+    secret: AUTH_SECRET,
+    session: { strategy: "jwt", maxAge: SESSION_TTL_SECONDS },
+    pages: { signIn: "/login" },
+    providers: [
+      Credentials({
+        credentials: {
+          username: { label: "Username", type: "text" },
+          password: { label: "Password", type: "password" },
+        },
+        authorize: async (credentials) => {
+          const username = String(credentials?.username || "").trim();
+          const password = String(credentials?.password || "");
+          if (!REVIEW_USERS[username] || !verifyPassword(password, REVIEW_USERS[username])) {
+            return null;
+          }
+          return { id: username, name: username };
+        },
+      }),
+    ],
+    callbacks: {
+      jwt({ token, user }) {
+        if (user) token.username = user.id;
+        return token;
+      },
+      session({ session, token }) {
+        session.user = session.user || {};
+        session.user.id = token.sub;
+        session.user.username = token.username || token.sub;
+        return session;
+      },
+    },
+  };
+
+  const app = express();
+  app.set("trust proxy", true);
+
+  app.get("/healthz", (req, res) => {
+    sendJson(res, 200, { ok: true, store: store.kind });
+  });
+
+  app.get("/login", (req, res) => {
+    const next = normalizeNextPath(req.query.next || req.query.callbackUrl || "/");
+    const error = req.query.error ? "Username or password is incorrect." : "";
+    sendHtml(res, 200, loginPage({ error, next }));
+  });
+
+  app.use("/auth", ExpressAuth(authConfig));
+
+  app.use(async (req, res, next) => {
     try {
-      const url = new URL(req.url, `http://${req.headers.host}`);
-      const pathname = decodeURIComponent(url.pathname);
-
-      if (pathname === "/healthz") {
-        sendJson(res, 200, { ok: true, store: store.kind });
+      if (!AUTH_ENABLED) {
+        req.authSession = { user: { username: "local" }, authDisabled: true };
+        next();
         return;
       }
-
-      if (req.method === "GET" && pathname === "/login") {
-        const user = currentUser(req);
-        const next = normalizeNextPath(url.searchParams.get("next") || "/");
-        if (user) {
-          redirect(res, next);
-          return;
-        }
-        sendHtml(res, 200, loginPage({ next }));
+      const session = await getSession(req, authConfig);
+      if (session?.user) {
+        req.authSession = session;
+        next();
         return;
       }
-
-      if (req.method === "POST" && pathname === "/login") {
-        const form = await readFormBody(req);
-        const username = String(form.username || "").trim();
-        const password = String(form.password || "");
-        const next = normalizeNextPath(form.next || "/");
-        if (REVIEW_USERS[username] && verifyPassword(password, REVIEW_USERS[username])) {
-          redirect(res, next, { "Set-Cookie": sessionCookie(createSessionToken(username)) });
-          return;
-        }
-        sendHtml(res, 401, loginPage({ error: "Username or password is incorrect.", next }));
+      if (isApiRequest(req.path)) {
+        sendError(res, 401, "Authentication required");
         return;
       }
-
-      if (req.method === "POST" && pathname === "/logout") {
-        redirect(res, "/login", { "Set-Cookie": sessionCookie("", 0) });
-        return;
-      }
-
-      const user = currentUser(req);
-      if (!user) {
-        if (isApiRequest(pathname)) {
-          sendError(res, 401, "Authentication required");
-          return;
-        }
-        const next = encodeURIComponent(`${url.pathname}${url.search}`);
-        redirect(res, `/login?next=${next}`);
-        return;
-      }
-
-      if (req.method === "GET" && pathname === "/api/session") {
-        sendJson(res, 200, { username: user.username, authDisabled: Boolean(user.authDisabled) });
-        return;
-      }
-
-      if (req.method === "GET" && pathname === "/api/reviews/current") {
-        const weekStart = currentMondayISO();
-        const review = await store.getOrCreate(weekStart, { rollover: true });
-        sendJson(res, 200, review);
-        return;
-      }
-
-      const reviewMatch = pathname.match(/^\/api\/reviews\/(\d{4}-\d{2}-\d{2})(\/lock)?$/);
-      if (reviewMatch) {
-        const [, weekStart, lockPath] = reviewMatch;
-        if (!isValidWeekStart(weekStart)) {
-          sendError(res, 400, "Invalid week_start");
-          return;
-        }
-        if (req.method === "GET" && !lockPath) {
-          const review = await store.getOrCreate(weekStart, {
-            rollover: url.searchParams.get("rollover") === "1",
-            emptyIfSeed: url.searchParams.get("emptyIfSeed") === "1",
-          });
-          sendJson(res, 200, review);
-          return;
-        }
-        if (req.method === "PUT" && !lockPath) {
-          const payload = await readJsonBody(req);
-          sendJson(res, 200, await store.put(weekStart, payload));
-          return;
-        }
-        if (req.method === "POST" && lockPath) {
-          sendJson(res, 200, await store.lock(weekStart));
-          return;
-        }
-      }
-
-      if (req.method === "GET") {
-        await serveStatic(req, res, pathname);
-        return;
-      }
-
-      sendError(res, 404, "Not found");
+      redirect(res, `/login?next=${encodeURIComponent(`${req.path}${req.url.includes("?") ? `?${req.url.split("?")[1]}` : ""}`)}`);
     } catch (error) {
-      console.error(error);
-      sendError(res, error.status || 500, error.message || "Server error");
+      next(error);
     }
   });
 
-  server.listen(PORT, HOST, () => {
+  app.use(express.json({ limit: "1mb" }));
+
+  app.get("/api/session", (req, res) => {
+    sendJson(res, 200, {
+      username: req.authSession?.user?.username || req.authSession?.user?.name || "local",
+      authDisabled: Boolean(req.authSession?.authDisabled),
+    });
+  });
+
+  app.get("/api/reviews/current", async (req, res, next) => {
+    try {
+      const weekStart = currentMondayISO();
+      const review = await store.getOrCreate(weekStart, { rollover: true });
+      sendJson(res, 200, review);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/reviews/:weekStart", async (req, res, next) => {
+    try {
+      const { weekStart } = req.params;
+      if (!isValidWeekStart(weekStart)) {
+        sendError(res, 400, "Invalid week_start");
+        return;
+      }
+      const review = await store.getOrCreate(weekStart, {
+        rollover: req.query.rollover === "1",
+        emptyIfSeed: req.query.emptyIfSeed === "1",
+      });
+      sendJson(res, 200, review);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.put("/api/reviews/:weekStart", async (req, res, next) => {
+    try {
+      const { weekStart } = req.params;
+      if (!isValidWeekStart(weekStart)) {
+        sendError(res, 400, "Invalid week_start");
+        return;
+      }
+      sendJson(res, 200, await store.put(weekStart, req.body));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/reviews/:weekStart/lock", async (req, res, next) => {
+    try {
+      const { weekStart } = req.params;
+      if (!isValidWeekStart(weekStart)) {
+        sendError(res, 400, "Invalid week_start");
+        return;
+      }
+      sendJson(res, 200, await store.lock(weekStart));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/styles.css", (req, res) => {
+    res.set("Cache-Control", "public, max-age=300");
+    res.sendFile(path.join(ROOT, "styles.css"));
+  });
+
+  app.get("/app.js", (req, res) => {
+    res.set("Cache-Control", "public, max-age=300");
+    res.sendFile(path.join(ROOT, "app.js"));
+  });
+
+  app.use("/assets", express.static(path.join(ROOT, "assets"), { maxAge: "5m" }));
+
+  app.get(["/", "/present"], (req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.sendFile(path.join(ROOT, "index.html"));
+  });
+
+  app.get(/^\/(?!api\/).*/, (req, res) => {
+    if (path.extname(req.path)) {
+      sendError(res, 404, "Not found");
+      return;
+    }
+    res.set("Cache-Control", "no-store");
+    res.sendFile(path.join(ROOT, "index.html"));
+  });
+
+  app.use((error, req, res, next) => {
+    console.error(error);
+    sendError(res, error.status || 500, error.message || "Server error");
+  });
+
+  app.listen(PORT, HOST, () => {
     console.log(`Stability product review listening on http://${HOST}:${PORT} (${store.kind})`);
   });
 }
