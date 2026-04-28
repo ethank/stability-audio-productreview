@@ -2,6 +2,14 @@ const fs = require("fs/promises");
 const path = require("path");
 
 const MIGRATIONS_DIR = path.join(__dirname, "..", "migrations");
+const DB_CONNECTION_TIMEOUT_MS = Number(process.env.DB_CONNECTION_TIMEOUT_MS || 5000);
+
+function databaseSslConfig() {
+  if (process.env.PGSSLMODE === "disable") return false;
+  if (process.env.PGSSLMODE === "require") return { rejectUnauthorized: false };
+  if (/sslmode=require/.test(process.env.DATABASE_URL || "")) return { rejectUnauthorized: false };
+  return false;
+}
 
 async function ensureMigrationsTable(pool) {
   await pool.query(`
@@ -60,7 +68,8 @@ async function main() {
   const { Pool } = require("pg");
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: false },
+    connectionTimeoutMillis: DB_CONNECTION_TIMEOUT_MS,
+    ssl: databaseSslConfig(),
   });
 
   try {

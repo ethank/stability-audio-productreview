@@ -5,9 +5,11 @@ const crypto = require("crypto");
 const { runMigrations } = require("./scripts/migrate");
 
 const PORT = Number(process.env.PORT || 3000);
+const HOST = process.env.HOST || "0.0.0.0";
 const ROOT = __dirname;
 const DATA_FILE = path.join(ROOT, "data", "reviews.json");
 const REVIEW_PASSWORD = process.env.REVIEW_PASSWORD || "";
+const DB_CONNECTION_TIMEOUT_MS = Number(process.env.DB_CONNECTION_TIMEOUT_MS || 5000);
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -183,11 +185,22 @@ function isAuthorized(req) {
   return crypto.timingSafeEqual(Buffer.from(password), Buffer.from(REVIEW_PASSWORD));
 }
 
+function databaseSslConfig() {
+  if (process.env.PGSSLMODE === "disable") return false;
+  if (process.env.PGSSLMODE === "require") return { rejectUnauthorized: false };
+  if (/sslmode=require/.test(process.env.DATABASE_URL || "")) return { rejectUnauthorized: false };
+  return false;
+}
+
 async function createStore() {
   if (process.env.DATABASE_URL) {
     try {
       const { Pool } = require("pg");
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.PGSSLMODE === "disable" ? false : { rejectUnauthorized: false } });
+      const pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        connectionTimeoutMillis: DB_CONNECTION_TIMEOUT_MS,
+        ssl: databaseSslConfig(),
+      });
       await runMigrations(pool);
       return {
         kind: "postgres",
@@ -340,8 +353,8 @@ async function main() {
     }
   });
 
-  server.listen(PORT, () => {
-    console.log(`Stability product review listening on http://localhost:${PORT} (${store.kind})`);
+  server.listen(PORT, HOST, () => {
+    console.log(`Stability product review listening on http://${HOST}:${PORT} (${store.kind})`);
   });
 }
 
