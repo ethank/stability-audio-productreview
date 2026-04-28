@@ -111,6 +111,13 @@ const departmentSettings = document.querySelector("#departmentSettings");
 const reviewTitleInput = document.querySelector("#reviewTitleInput");
 const reviewOwnerInput = document.querySelector("#reviewOwnerInput");
 const reviewStatusInput = document.querySelector("#reviewStatusInput");
+const workflowStatus = document.querySelector("#workflowStatus");
+const workflowTitle = document.querySelector("#workflowTitle");
+const workflowDescription = document.querySelector("#workflowDescription");
+const startBlankWeekButton = document.querySelector("#startBlankWeek");
+const startFromPreviousWeekButton = document.querySelector("#startFromPreviousWeek");
+const markReadyButton = document.querySelector("#markReady");
+const lockWeekFromWorkflowButton = document.querySelector("#lockWeekFromWorkflow");
 
 const VIEW_TITLES = {
   review: "Monday Review",
@@ -118,6 +125,13 @@ const VIEW_TITLES = {
   mvps: "MVPs",
   history: "History",
   settings: "Settings",
+};
+
+const STATUS_LABELS = {
+  not_started: "Not Started",
+  draft: "Draft",
+  ready: "Ready",
+  locked: "Locked",
 };
 
 function viewFromHash() {
@@ -297,6 +311,19 @@ function blankReview(targetWeekStart, templatePayload = null) {
   });
 }
 
+function draftBlankReview(targetWeekStart, templatePayload = null) {
+  return {
+    ...blankReview(targetWeekStart, templatePayload),
+    status: "draft",
+    departmentHeadUpdate: "Add this week's department-head update here.",
+    teamWideUpdates: [],
+  };
+}
+
+function ensureDraftStatus() {
+  if (review.status === "not_started") review.status = "draft";
+}
+
 function isSeededDefaultReview(payload) {
   const review = normalizeReview(payload);
   const fallback = createDefaultReview(review.weekStart);
@@ -354,6 +381,53 @@ function localReviewForWeek(targetWeekStart, options = {}) {
   return created;
 }
 
+function teamReadiness(team) {
+  const itemCount = team.did.length + team.doing.length + team.blocked.length + team.mvps.length;
+  if (itemCount === 0) return { label: "Missing", className: "missing" };
+  if (team.blocked.length) return { label: "Blocked", className: "blocked" };
+  return { label: "Updated", className: "updated" };
+}
+
+function workflowCopy() {
+  const status = review.status || "draft";
+  if (status === "not_started") {
+    return {
+      title: "Start this week",
+      description: "Create a blank record or roll last week's commitments forward before teams update.",
+    };
+  }
+  if (status === "ready") {
+    return {
+      title: "Ready for review",
+      description: "Use presentation mode for the meeting, then lock the week as the canonical record.",
+    };
+  }
+  if (status === "locked") {
+    return {
+      title: "Canonical record locked",
+      description: "This week has been locked after review. Export or browse history from here.",
+    };
+  }
+  return {
+    title: "Prepare this week",
+    description: "Update teams, confirm blockers and MVPs, then mark the record ready for review.",
+  };
+}
+
+function renderWorkflow() {
+  const status = review.status || "draft";
+  const copy = workflowCopy();
+  workflowStatus.textContent = STATUS_LABELS[status] || status;
+  workflowStatus.dataset.status = status;
+  workflowTitle.textContent = copy.title;
+  workflowDescription.textContent = copy.description;
+  startBlankWeekButton.hidden = status !== "not_started";
+  startFromPreviousWeekButton.hidden = status !== "not_started";
+  markReadyButton.hidden = status !== "draft";
+  lockWeekFromWorkflowButton.hidden = status !== "draft" && status !== "ready";
+  document.querySelector("#commitmentsStatus").textContent = STATUS_LABELS[status] || status;
+}
+
 function renderTeamWideUpdates() {
   const list = document.querySelector("#teamWideUpdates");
   list.innerHTML = "";
@@ -373,6 +447,7 @@ function renderTeamWideUpdates() {
 function renderTeams() {
   teamList.innerHTML = "";
   review.teams.forEach((team) => {
+    const readiness = teamReadiness(team);
     const button = document.createElement("button");
     button.className = `team-button${team.id === selectedTeamId ? " active" : ""}`;
     button.type = "button";
@@ -381,8 +456,9 @@ function renderTeams() {
       <span>
         <strong>${escapeHtml(team.name)}</strong>
         <small>${escapeHtml(team.members)}</small>
+        <em>${escapeHtml(readiness.label)}</em>
       </span>
-      <span class="blocker-dot${team.blocked.length ? " has-blocker" : ""}" aria-label="${team.blocked.length ? "Blocked" : "No blockers"}"></span>
+      <span class="blocker-dot ${readiness.className}" aria-label="${readiness.label}"></span>
     `;
     button.addEventListener("click", () => {
       selectedTeamId = team.id;
@@ -421,9 +497,10 @@ function renderLane(team, lane) {
 }
 
 function renderMetrics() {
-  document.querySelector("#teamsReporting").textContent = review.teams.length;
+  document.querySelector("#teamsReporting").textContent = review.teams.filter((team) => teamReadiness(team).className !== "missing").length;
   document.querySelector("#mvpsShipped").textContent = review.teams.reduce((sum, team) => sum + team.mvps.length, 0);
   document.querySelector("#teamsBlocked").textContent = review.teams.filter((team) => team.blocked.length).length;
+  document.querySelector("#commitmentsStatus").textContent = STATUS_LABELS[review.status || "draft"] || review.status || "Draft";
 }
 
 function renderHistory() {
@@ -507,7 +584,7 @@ function renderHistoryPage() {
   const blockerCount = allItems("blocked").length;
   currentWeekFacts.innerHTML = `
     <div><dt>Week</dt><dd>${escapeHtml(formatDate(weekStart))}</dd></div>
-    <div><dt>Status</dt><dd>${escapeHtml(review.status || "draft")}</dd></div>
+    <div><dt>Status</dt><dd>${escapeHtml(STATUS_LABELS[review.status || "draft"] || review.status || "Draft")}</dd></div>
     <div><dt>Departments</dt><dd>${review.teams.length}</dd></div>
     <div><dt>MVPs</dt><dd>${mvpCount}</dd></div>
     <div><dt>Blockers</dt><dd>${blockerCount}</dd></div>
@@ -525,7 +602,7 @@ function renderHistoryPage() {
 function renderSettingsPage() {
   reviewTitleInput.value = review.title;
   reviewOwnerInput.value = review.updatedBy || "Ethan";
-  reviewStatusInput.value = review.status || "draft";
+  reviewStatusInput.value = STATUS_LABELS[review.status || "draft"] || review.status || "Draft";
   departmentSettings.innerHTML = review.teams
     .map(
       (team, index) => `
@@ -549,6 +626,7 @@ function renderApp() {
   const team = selectedTeam();
   renderTeams();
   renderMetrics();
+  renderWorkflow();
   renderHistory();
   renderTeamWideUpdates();
   headUpdate.value = review.departmentHeadUpdate;
@@ -586,15 +664,15 @@ function teamSlide(team) {
       <p class="slide-north-star">${escapeHtml(team.northStar)}</p>
       <div class="slide-grid">
         <section>
-          <h3>Update from last week</h3>
+          <h3>Last week follow-up</h3>
           <ul>${listMarkup(team.did.map((item) => ({ team: team.name, item })), 3)}</ul>
         </section>
         <section>
-          <h3>Doing</h3>
+          <h3>This week commitments</h3>
           <ul>${listMarkup(team.doing.map((item) => ({ team: team.name, item })), 3)}</ul>
         </section>
         <section class="blocked-section">
-          <h3>Blocked</h3>
+          <h3>Blockers / asks</h3>
           <ul>${team.blocked.length ? listMarkup(team.blocked.map((item) => ({ team: team.name, item })), 3) : "<li><strong>No blockers</strong><small>Nothing requiring dept-head escalation.</small></li>"}</ul>
         </section>
         <section class="mvp-section">
@@ -631,11 +709,11 @@ function slides() {
         <h2>What ships, what needs help</h2>
         <div class="slide-grid two-col">
           <section class="mvp-section">
-            <h3>MVPs for the week</h3>
+            <h3>MVPs / shipped</h3>
             <ul>${listMarkup(allItems("mvps"), 8)}</ul>
           </section>
           <section class="blocked-section">
-            <h3>Blocked</h3>
+            <h3>Blockers / asks</h3>
             <ul>${listMarkup(allItems("blocked"), 8)}</ul>
           </section>
         </div>
@@ -740,6 +818,7 @@ async function saveReview() {
 }
 
 function mutateReview(callback) {
+  ensureDraftStatus();
   callback();
   renderApp();
   scheduleSave();
@@ -748,6 +827,7 @@ function mutateReview(callback) {
 function saveSnapshot() {
   const team = selectedTeam();
   mutateReview(() => {
+    review.status = review.status === "locked" ? "locked" : "ready";
     review.history.unshift([
       formatDate(weekStart),
       team.northStar,
@@ -757,6 +837,41 @@ function saveSnapshot() {
       review.updatedBy || "Ethan",
       "Just now",
     ]);
+  });
+}
+
+async function startBlankWeek() {
+  review = draftBlankReview(review.weekStart, review);
+  weekStart = parseDateOnly(review.weekStart);
+  setWeekLabel();
+  renderApp();
+  await saveReview();
+}
+
+async function previousWeekReview() {
+  const previousWeekStart = addDaysISO(review.weekStart, -7);
+  if (window.location.protocol === "file:") return localReviewForWeek(previousWeekStart, { emptyIfSeed: true });
+  const response = await fetch(`/api/reviews/${previousWeekStart}?emptyIfSeed=1`);
+  if (!response.ok) throw new Error(`Could not load previous week: ${response.status}`);
+  return normalizeReview(await response.json());
+}
+
+async function startFromPreviousWeek() {
+  const previous = await previousWeekReview();
+  review =
+    previous.status && previous.status !== "not_started"
+      ? rolloverReview(previous, review.weekStart)
+      : draftBlankReview(review.weekStart, previous);
+  review.status = "draft";
+  weekStart = parseDateOnly(review.weekStart);
+  setWeekLabel();
+  renderApp();
+  await saveReview();
+}
+
+function markWeekReady() {
+  mutateReview(() => {
+    review.status = "ready";
   });
 }
 
@@ -865,6 +980,28 @@ document.querySelector("#addMvpFromView").addEventListener("click", () => {
 });
 document.querySelector("#saveSnapshotFromHistory").addEventListener("click", saveSnapshot);
 document.querySelector("#lockReview").addEventListener("click", () => {
+  lockReview().catch((error) => {
+    console.error(error);
+    saveState = "Lock failed";
+    saveStateLabel.textContent = saveState;
+  });
+});
+startBlankWeekButton.addEventListener("click", () => {
+  startBlankWeek().catch((error) => {
+    console.error(error);
+    saveState = "Start failed";
+    saveStateLabel.textContent = saveState;
+  });
+});
+startFromPreviousWeekButton.addEventListener("click", () => {
+  startFromPreviousWeek().catch((error) => {
+    console.error(error);
+    saveState = "Start failed";
+    saveStateLabel.textContent = saveState;
+  });
+});
+markReadyButton.addEventListener("click", markWeekReady);
+lockWeekFromWorkflowButton.addEventListener("click", () => {
   lockReview().catch((error) => {
     console.error(error);
     saveState = "Lock failed";

@@ -102,6 +102,20 @@
           </div>
         </header>
 
+        <section class="workflow-panel" aria-label="Week workflow">
+          <div>
+            <span class="workflow-status" id="workflowStatus">Draft</span>
+            <strong id="workflowTitle">Prepare this week</strong>
+            <p id="workflowDescription">Update the teams, mark the record ready, then lock the canonical version after review.</p>
+          </div>
+          <div class="workflow-actions">
+            <button type="button" id="startBlankWeek">Start blank</button>
+            <button type="button" id="startFromPreviousWeek">Start from previous week</button>
+            <button type="button" id="markReady">Mark ready</button>
+            <button type="button" id="lockWeekFromWorkflow">Lock week</button>
+          </div>
+        </section>
+
         <section class="overview-grid app-view" data-view="review" aria-label="Department overview">
           <article class="overview-card metrics-card">
             <h2>
@@ -109,10 +123,10 @@
               Department Overview
             </h2>
             <dl class="metrics">
-              <div><dt>Teams reporting</dt><dd id="teamsReporting">6</dd></div>
+              <div><dt>Teams reporting</dt><dd id="teamsReporting">0</dd></div>
               <div><dt>MVPs shipped</dt><dd id="mvpsShipped">14</dd></div>
               <div><dt>Teams blocked</dt><dd id="teamsBlocked">3</dd></div>
-              <div><dt>Commitments</dt><dd>On track</dd></div>
+              <div><dt>Week status</dt><dd id="commitmentsStatus">Draft</dd></div>
             </dl>
           </article>
           <article class="overview-card head-update">
@@ -148,7 +162,7 @@
         <section class="board app-view" data-view="review" aria-label="Weekly product review board">
           <article class="lane" data-lane="did">
             <header>
-              <h2><span class="status-icon done"></span>Update From Last Week</h2>
+              <h2><span class="status-icon done"></span>Last Week Follow-up</h2>
               <span class="count" id="didCount">4</span>
             </header>
             <div class="items" id="didItems"></div>
@@ -156,7 +170,7 @@
           </article>
           <article class="lane" data-lane="doing">
             <header>
-              <h2><span class="status-icon doing"></span>Doing This Week</h2>
+              <h2><span class="status-icon doing"></span>This Week Commitments</h2>
               <span class="count" id="doingCount">4</span>
             </header>
             <div class="items" id="doingItems"></div>
@@ -164,7 +178,7 @@
           </article>
           <article class="lane" data-lane="blocked">
             <header>
-              <h2><span class="status-icon blocked"></span>Blocked</h2>
+              <h2><span class="status-icon blocked"></span>Blockers / Asks</h2>
               <span class="count" id="blockedCount">2</span>
             </header>
             <div class="items" id="blockedItems"></div>
@@ -172,7 +186,7 @@
           </article>
           <article class="lane mvp-lane" data-lane="mvps" id="mvpsLane">
             <header>
-              <h2><span class="status-icon mvp"></span>MVPs Shipped</h2>
+              <h2><span class="status-icon mvp"></span>MVPs / Shipped</h2>
               <span class="count" id="mvpsCount">3</span>
             </header>
             <div class="items" id="mvpsItems"></div>
@@ -186,7 +200,7 @@
               <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v6h6M12 7v6l4 2" /></svg>
               Canonical Record / History
             </h2>
-            <button type="button" id="saveSnapshot">Save this week</button>
+            <button type="button" id="saveSnapshot">Snapshot now</button>
           </header>
           <div class="table-wrap">
             <table>
@@ -257,7 +271,7 @@
               <p>Canonical weekly records and review snapshots.</p>
             </div>
             <div class="header-actions">
-              <button type="button" id="saveSnapshotFromHistory">Save snapshot</button>
+              <button type="button" id="saveSnapshotFromHistory">Snapshot now</button>
               <button type="button" id="lockReview">Lock week</button>
             </div>
           </header>
@@ -326,10 +340,10 @@
         <label>
           Section
           <select id="newSection">
-            <option value="did">Update From Last Week</option>
-            <option value="doing">Doing This Week</option>
-            <option value="blocked">Blocked</option>
-            <option value="mvps">MVPs Shipped</option>
+            <option value="did">Last Week Follow-up</option>
+            <option value="doing">This Week Commitments</option>
+            <option value="blocked">Blockers / Asks</option>
+            <option value="mvps">MVPs / Shipped</option>
           </select>
         </label>
         <label>

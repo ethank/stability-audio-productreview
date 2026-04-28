@@ -211,15 +211,34 @@ svg {
   line-height: 1.25;
 }
 
+.team-button em {
+  display: inline-block;
+  margin-top: 5px;
+  color: var(--soft);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 820;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .blocker-dot {
   width: 8px;
   height: 8px;
   border-radius: 999px;
+  background: var(--soft);
+}
+
+.blocker-dot.blocked {
+  background: var(--red);
+}
+
+.blocker-dot.updated {
   background: var(--teal);
 }
 
-.blocker-dot.has-blocker {
-  background: var(--red);
+.blocker-dot.missing {
+  background: var(--soft);
 }
 
 .primary-nav {
@@ -640,6 +659,93 @@ h1 svg {
 .primary-action:hover {
   border-color: #0f514c;
   background: #0f5f58;
+}
+
+.workflow-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.workflow-panel strong,
+.workflow-panel p {
+  display: block;
+}
+
+.workflow-panel strong {
+  margin-top: 5px;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.workflow-panel p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.workflow-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 820;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.workflow-status[data-status="not_started"] {
+  background: #f1ebe0;
+  color: var(--muted);
+}
+
+.workflow-status[data-status="ready"] {
+  background: var(--teal-soft);
+  color: var(--teal);
+}
+
+.workflow-status[data-status="locked"] {
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+
+.workflow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.workflow-actions button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 740;
+}
+
+.workflow-actions button:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.workflow-actions button[hidden] {
+  display: none;
 }
 
 .overview-grid {
@@ -1548,6 +1654,18 @@ dialog::backdrop {
 
   .topbar {
     display: grid;
+  }
+
+  .workflow-panel {
+    display: grid;
+  }
+
+  .workflow-actions {
+    justify-content: stretch;
+  }
+
+  .workflow-actions button {
+    flex: 1 1 180px;
   }
 
   .top-actions {
