@@ -668,17 +668,22 @@ function renderUsersPage() {
         .map(
           (user) => `
             <article class="user-row" data-user-id="${escapeHtml(user.id)}">
-              <div>
-                <strong>${escapeHtml(user.name || user.email)}</strong>
-                <small>${escapeHtml(user.email)}</small>
+              <div class="user-identity">
+                <span>${escapeHtml((user.name || user.email).slice(0, 2).toUpperCase())}</span>
+                <div>
+                  <strong>${escapeHtml(user.name || user.email)}</strong>
+                  <small>${escapeHtml(user.email)}</small>
+                </div>
               </div>
-              <input type="text" value="${escapeHtml(user.name || "")}" data-user-field="name" aria-label="User name" />
-              <select data-user-field="role" aria-label="User role">
-                <option value="admin"${user.role === "admin" ? " selected" : ""}>Admin</option>
-                <option value="editor"${user.role === "editor" ? " selected" : ""}>Editor</option>
-                <option value="viewer"${user.role === "viewer" ? " selected" : ""}>Viewer</option>
-              </select>
-              <label><input type="checkbox" data-user-field="active"${user.active ? " checked" : ""} /> Active</label>
+              <label>Name<input type="text" value="${escapeHtml(user.name || "")}" data-user-field="name" aria-label="User name" /></label>
+              <label>Role
+                <select data-user-field="role" aria-label="User role">
+                  <option value="admin"${user.role === "admin" ? " selected" : ""}>Admin</option>
+                  <option value="editor"${user.role === "editor" ? " selected" : ""}>Editor</option>
+                  <option value="viewer"${user.role === "viewer" ? " selected" : ""}>Viewer</option>
+                </select>
+              </label>
+              <label class="user-active"><input type="checkbox" data-user-field="active"${user.active ? " checked" : ""} /> Active</label>
             </article>
           `,
         )
