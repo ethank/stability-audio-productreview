@@ -64,7 +64,15 @@ When no review users are configured, the app runs open for local development.
 
 The app uses Auth.js mounted at `/auth/*` with the Credentials provider.
 
-For a simple private deployment, set:
+For production, seed the first admin into Postgres:
+
+```bash
+npm run seed-admin -- --email ethan@example.com --name "Ethan Kaplan" --password "use-a-long-temporary-password"
+```
+
+The admin can then create editors, viewers, and additional admins from Settings -> Users.
+
+For a simple env-only fallback, set:
 
 ```txt
 REVIEW_USERNAME=ethan
@@ -86,12 +94,21 @@ npm run hash-password -- "your-password"
 
 Auth.js sessions are stored in HTTP-only cookies. `SESSION_TTL_SECONDS` defaults to 7 days.
 
+Roles:
+
+- `admin`: manage users, edit reviews, lock weeks
+- `editor`: edit reviews and lock weeks
+- `viewer`: read and present reviews
+
 ## API
 
 - `GET /api/reviews/current`
 - `GET /api/reviews/:weekStart`
 - `PUT /api/reviews/:weekStart`
 - `POST /api/reviews/:weekStart/lock`
+- `GET /api/users` (admin)
+- `POST /api/users` (admin)
+- `PATCH /api/users/:id` (admin)
 
 `weekStart` uses `YYYY-MM-DD`, keyed to the Monday of the review week.
 
@@ -101,5 +118,6 @@ Migrations live in `migrations/` and are applied in filename order:
 
 - `001_create_review_weeks.sql`
 - `002_create_review_events.sql`
+- `003_create_review_users.sql`
 
 Applied migrations are tracked in `schema_migrations` with a SHA-256 checksum so edited historical migrations fail loudly instead of drifting silently.

@@ -87,6 +87,8 @@ let currentSlide = 0;
 let saveTimer = null;
 let saveState = "Local fallback";
 let activeView = viewFromHash();
+let currentSession = { username: "local", role: "admin", authDisabled: true };
+let users = [];
 
 const teamList = document.querySelector("#teamList");
 const weekLabel = document.querySelector("#weekLabel");
@@ -111,6 +113,9 @@ const departmentSettings = document.querySelector("#departmentSettings");
 const reviewTitleInput = document.querySelector("#reviewTitleInput");
 const reviewOwnerInput = document.querySelector("#reviewOwnerInput");
 const reviewStatusInput = document.querySelector("#reviewStatusInput");
+const usersPanel = document.querySelector("#usersPanel");
+const userList = document.querySelector("#userList");
+const createUserButton = document.querySelector("#createUser");
 const workflowStatus = document.querySelector("#workflowStatus");
 const workflowTitle = document.querySelector("#workflowTitle");
 const workflowDescription = document.querySelector("#workflowDescription");
@@ -229,6 +234,18 @@ async function appFetch(input, init) {
     throw new Error("Authentication required");
   }
   return response;
+}
+
+async function loadSession() {
+  if (window.location.protocol === "file:") return;
+  const response = await appFetch("/api/session");
+  if (response.ok) currentSession = await response.json();
+}
+
+async function loadUsers() {
+  if (window.location.protocol === "file:" || currentSession.role !== "admin") return;
+  const response = await appFetch("/api/users");
+  if (response.ok) users = (await response.json()).users || [];
 }
 
 function allItems(lane) {
@@ -614,6 +631,7 @@ function renderSettingsPage() {
   reviewTitleInput.value = review.title;
   reviewOwnerInput.value = review.updatedBy || "Ethan";
   reviewStatusInput.value = STATUS_LABELS[review.status || "draft"] || review.status || "Draft";
+  usersPanel.hidden = currentSession.role !== "admin";
   departmentSettings.innerHTML = review.teams
     .map(
       (team, index) => `
@@ -631,6 +649,32 @@ function renderSettingsPage() {
       `,
     )
     .join("");
+  renderUsersPage();
+}
+
+function renderUsersPage() {
+  if (currentSession.role !== "admin") return;
+  userList.innerHTML = users.length
+    ? users
+        .map(
+          (user) => `
+            <article class="user-row" data-user-id="${escapeHtml(user.id)}">
+              <div>
+                <strong>${escapeHtml(user.name || user.email)}</strong>
+                <small>${escapeHtml(user.email)}</small>
+              </div>
+              <input type="text" value="${escapeHtml(user.name || "")}" data-user-field="name" aria-label="User name" />
+              <select data-user-field="role" aria-label="User role">
+                <option value="admin"${user.role === "admin" ? " selected" : ""}>Admin</option>
+                <option value="editor"${user.role === "editor" ? " selected" : ""}>Editor</option>
+                <option value="viewer"${user.role === "viewer" ? " selected" : ""}>Viewer</option>
+              </select>
+              <label><input type="checkbox" data-user-field="active"${user.active ? " checked" : ""} /> Active</label>
+            </article>
+          `,
+        )
+        .join("")
+    : '<article class="summary-row"><strong>No DB users yet</strong><small>Seed an admin or create the first user here.</small></article>';
 }
 
 function renderApp() {
@@ -1163,7 +1207,57 @@ departmentSettings.addEventListener("input", (event) => {
   scheduleSave();
 });
 
-loadReview(new URLSearchParams(window.location.search).get("week"))
+createUserButton.addEventListener("click", async () => {
+  const payload = {
+    name: document.querySelector("#newUserName").value.trim(),
+    email: document.querySelector("#newUserEmail").value.trim(),
+    role: document.querySelector("#newUserRole").value,
+    password: document.querySelector("#newUserPassword").value,
+  };
+  saveState = "Creating user...";
+  saveStateLabel.textContent = saveState;
+  const response = await appFetch("/api/users", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    saveState = "User create failed";
+    saveStateLabel.textContent = saveState;
+    return;
+  }
+  document.querySelector("#newUserName").value = "";
+  document.querySelector("#newUserEmail").value = "";
+  document.querySelector("#newUserPassword").value = "";
+  await loadUsers();
+  renderUsersPage();
+  saveState = "User created";
+  saveStateLabel.textContent = saveState;
+});
+
+userList.addEventListener("change", async (event) => {
+  const row = event.target.closest("[data-user-id]");
+  const field = event.target.dataset.userField;
+  if (!row || !field) return;
+  const value = field === "active" ? event.target.checked : event.target.value;
+  const response = await appFetch(`/api/users/${row.dataset.userId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ [field]: value }),
+  });
+  if (!response.ok) {
+    saveState = "User update failed";
+    saveStateLabel.textContent = saveState;
+    return;
+  }
+  await loadUsers();
+  renderUsersPage();
+  saveState = "User updated";
+  saveStateLabel.textContent = saveState;
+});
+
+loadSession()
+  .then(() => Promise.all([loadReview(new URLSearchParams(window.location.search).get("week")), loadUsers()]))
   .catch((error) => {
     console.error(error);
     const local = localStorage.getItem(STORAGE_KEY);

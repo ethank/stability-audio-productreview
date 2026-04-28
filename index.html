@@ -327,6 +327,23 @@
               <h3>Departments</h3>
               <div class="department-settings" id="departmentSettings"></div>
             </article>
+            <article class="editor-panel wide" id="usersPanel">
+              <h3>Users</h3>
+              <div class="user-create-grid">
+                <label>Name<input id="newUserName" type="text" placeholder="Zach" /></label>
+                <label>Email<input id="newUserEmail" type="email" placeholder="zach@example.com" /></label>
+                <label>Role
+                  <select id="newUserRole">
+                    <option value="editor">Editor</option>
+                    <option value="viewer">Viewer</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </label>
+                <label>Password<input id="newUserPassword" type="password" placeholder="Temporary password" /></label>
+                <button type="button" id="createUser">Create user</button>
+              </div>
+              <div class="user-list" id="userList"></div>
+            </article>
           </div>
         </section>
       </main>

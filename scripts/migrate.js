@@ -87,3 +87,5 @@ if (require.main === module) {
 }
 
 module.exports = { runMigrations };
+module.exports.databaseSslConfig = databaseSslConfig;
+module.exports.DB_CONNECTION_TIMEOUT_MS = DB_CONNECTION_TIMEOUT_MS;

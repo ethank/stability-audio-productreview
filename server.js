@@ -1,7 +1,7 @@
 const fs = require("fs/promises");
 const path = require("path");
-const crypto = require("crypto");
 const express = require("express");
+const { hashPassword, verifyPassword } = require("./lib/passwords");
 const { runMigrations } = require("./scripts/migrate");
 
 const PORT = Number(process.env.PORT || 3000);
@@ -13,6 +13,8 @@ const REVIEW_USERNAME = process.env.REVIEW_USERNAME || "ethan";
 const REVIEW_PASSWORD_HASH = process.env.REVIEW_PASSWORD_HASH || "";
 const SESSION_TTL_SECONDS = Number(process.env.SESSION_TTL_SECONDS || 60 * 60 * 24 * 7);
 const AUTH_SECRET = process.env.AUTH_SECRET || process.env.SESSION_SECRET || REVIEW_PASSWORD || REVIEW_PASSWORD_HASH || "local-dev-auth-secret";
+const AUTH_REQUIRED =
+  process.env.AUTH_REQUIRED === "0" ? false : process.env.AUTH_REQUIRED === "1" || Boolean(process.env.DATABASE_URL) || Boolean(REVIEW_PASSWORD || REVIEW_PASSWORD_HASH || process.env.REVIEW_USERS);
 const DB_CONNECTION_TIMEOUT_MS = Number(process.env.DB_CONNECTION_TIMEOUT_MS || 5000);
 
 const DEFAULT_TEAMS = [
@@ -296,40 +298,49 @@ function loadReviewUsers() {
     }
     Object.entries(parsed).forEach(([username, password]) => {
       if (typeof username === "string" && typeof password === "string" && username && password) {
-        users[username] = password;
+        users[username.trim().toLowerCase()] = password;
       }
     });
   }
 
-  if (REVIEW_PASSWORD) users[REVIEW_USERNAME] = REVIEW_PASSWORD;
-  if (REVIEW_PASSWORD_HASH) users[REVIEW_USERNAME] = REVIEW_PASSWORD_HASH;
+  if (REVIEW_PASSWORD) users[REVIEW_USERNAME.trim().toLowerCase()] = REVIEW_PASSWORD;
+  if (REVIEW_PASSWORD_HASH) users[REVIEW_USERNAME.trim().toLowerCase()] = REVIEW_PASSWORD_HASH;
   return users;
 }
 
 const REVIEW_USERS = loadReviewUsers();
-const AUTH_ENABLED = Object.keys(REVIEW_USERS).length > 0;
-
-function timingSafeEqualString(actual, expected) {
-  const actualBuffer = Buffer.from(actual);
-  const expectedBuffer = Buffer.from(expected);
-  if (actualBuffer.length !== expectedBuffer.length) return false;
-  return crypto.timingSafeEqual(actualBuffer, expectedBuffer);
-}
-
-function verifyPassword(input, stored) {
-  if (!stored) return false;
-  if (stored.startsWith("scrypt$")) {
-    const [, salt, expected] = stored.split("$");
-    if (!salt || !expected) return false;
-    const expectedBuffer = Buffer.from(expected, "base64url");
-    const actualBuffer = crypto.scryptSync(input, Buffer.from(salt, "base64url"), expectedBuffer.length);
-    return crypto.timingSafeEqual(actualBuffer, expectedBuffer);
-  }
-  return timingSafeEqualString(input, stored);
-}
 
 function isApiRequest(pathname) {
   return pathname.startsWith("/api/");
+}
+
+function publicUser(row) {
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    email: row.email,
+    name: row.name,
+    role: row.role,
+    active: Boolean(row.active),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function validateRole(role) {
+  return ["admin", "editor", "viewer"].includes(role) ? role : "editor";
+}
+
+function requireAdmin(req, res) {
+  if (req.authSession?.user?.role === "admin") return true;
+  sendError(res, 403, "Admin access required");
+  return false;
+}
+
+function requireEditor(req, res) {
+  if (["admin", "editor"].includes(req.authSession?.user?.role)) return true;
+  sendError(res, 403, "Editor access required");
+  return false;
 }
 
 function loginPage({ error = "", next = "/" } = {}) {
@@ -451,7 +462,7 @@ function loginPage({ error = "", next = "/" } = {}) {
       <form method="post" action="/auth/callback/credentials">
         <input type="hidden" name="csrfToken" id="csrfToken" />
         <input type="hidden" name="callbackUrl" value="${escapeHtml(next)}" />
-        <label>Username<input name="username" autocomplete="username" required autofocus /></label>
+        <label>Email or username<input name="username" autocomplete="username" required autofocus /></label>
         <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
         <button type="submit">Sign in</button>
       </form>
@@ -526,6 +537,58 @@ async function createStore() {
           const locked = normalizeReview({ ...existing, status: "locked", lockedAt: new Date().toISOString() }, weekStart);
           return this.put(weekStart, locked);
         },
+        async getUserByEmail(email) {
+          const result = await pool.query(
+            `select id, email, name, role, password_hash, active, created_at, updated_at
+             from review_users
+             where lower(email) = lower($1)
+             limit 1`,
+            [email],
+          );
+          return result.rows[0] || null;
+        },
+        async listUsers() {
+          const result = await pool.query(
+            `select id, email, name, role, active, created_at, updated_at
+             from review_users
+             order by active desc, role, email`,
+          );
+          return result.rows.map(publicUser);
+        },
+        async createUser(payload) {
+          const result = await pool.query(
+            `insert into review_users (email, name, role, password_hash, active)
+             values ($1, $2, $3, $4, $5)
+             returning id, email, name, role, active, created_at, updated_at`,
+            [payload.email, payload.name, payload.role, payload.passwordHash, payload.active],
+          );
+          return publicUser(result.rows[0]);
+        },
+        async updateUser(id, payload) {
+          const existing = await pool.query("select * from review_users where id = $1", [id]);
+          if (!existing.rows.length) return null;
+          const current = existing.rows[0];
+          const result = await pool.query(
+            `update review_users
+             set email = $2,
+                 name = $3,
+                 role = $4,
+                 active = $5,
+                 password_hash = $6,
+                 updated_at = now()
+             where id = $1
+             returning id, email, name, role, active, created_at, updated_at`,
+            [
+              id,
+              payload.email ?? current.email,
+              payload.name ?? current.name,
+              payload.role ?? current.role,
+              payload.active ?? current.active,
+              payload.passwordHash ?? current.password_hash,
+            ],
+          );
+          return publicUser(result.rows[0]);
+        },
       };
     } catch (error) {
       console.warn(`Postgres unavailable, falling back to local JSON store: ${error.message}`);
@@ -577,6 +640,18 @@ async function createStore() {
       const locked = normalizeReview({ ...existing, status: "locked", lockedAt: new Date().toISOString() }, weekStart);
       return this.put(weekStart, locked);
     },
+    async getUserByEmail() {
+      return null;
+    },
+    async listUsers() {
+      return [];
+    },
+    async createUser() {
+      throw Object.assign(new Error("User management requires DATABASE_URL"), { status: 400 });
+    },
+    async updateUser() {
+      throw Object.assign(new Error("User management requires DATABASE_URL"), { status: 400 });
+    },
   };
 }
 
@@ -597,24 +672,35 @@ async function main() {
           password: { label: "Password", type: "password" },
         },
         authorize: async (credentials) => {
-          const username = String(credentials?.username || "").trim();
+          const username = String(credentials?.username || "").trim().toLowerCase();
           const password = String(credentials?.password || "");
+          const dbUser = await store.getUserByEmail(username);
+          if (dbUser) {
+            if (!dbUser.active || !verifyPassword(password, dbUser.password_hash)) {
+              return null;
+            }
+            return { id: String(dbUser.id), email: dbUser.email, name: dbUser.name, role: dbUser.role };
+          }
           if (!REVIEW_USERS[username] || !verifyPassword(password, REVIEW_USERS[username])) {
             return null;
           }
-          return { id: username, name: username };
+          return { id: username, email: username.includes("@") ? username : undefined, name: username, role: "admin" };
         },
       }),
     ],
     callbacks: {
       jwt({ token, user }) {
-        if (user) token.username = user.id;
+        if (user) {
+          token.username = user.email || user.id;
+          token.role = user.role || "editor";
+        }
         return token;
       },
       session({ session, token }) {
         session.user = session.user || {};
         session.user.id = token.sub;
         session.user.username = token.username || token.sub;
+        session.user.role = token.role || "editor";
         return session;
       },
     },
@@ -637,8 +723,8 @@ async function main() {
 
   app.use(async (req, res, next) => {
     try {
-      if (!AUTH_ENABLED) {
-        req.authSession = { user: { username: "local" }, authDisabled: true };
+      if (!AUTH_REQUIRED) {
+        req.authSession = { user: { username: "local", role: "admin" }, authDisabled: true };
         next();
         return;
       }
@@ -663,8 +749,75 @@ async function main() {
   app.get("/api/session", (req, res) => {
     sendJson(res, 200, {
       username: req.authSession?.user?.username || req.authSession?.user?.name || "local",
+      role: req.authSession?.user?.role || "viewer",
       authDisabled: Boolean(req.authSession?.authDisabled),
     });
+  });
+
+  app.get("/api/users", async (req, res, next) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      sendJson(res, 200, { users: await store.listUsers() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/users", async (req, res, next) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const email = String(req.body.email || "").trim().toLowerCase();
+      const name = String(req.body.name || email).trim();
+      const password = String(req.body.password || "");
+      if (!email || !email.includes("@")) {
+        sendError(res, 400, "Valid email is required");
+        return;
+      }
+      if (!password || password.length < 12) {
+        sendError(res, 400, "Password must be at least 12 characters");
+        return;
+      }
+      const user = await store.createUser({
+        email,
+        name,
+        role: validateRole(req.body.role),
+        passwordHash: hashPassword(password),
+        active: req.body.active !== false,
+      });
+      sendJson(res, 201, user);
+    } catch (error) {
+      if (error.code === "23505") {
+        sendError(res, 409, "User already exists");
+        return;
+      }
+      next(error);
+    }
+  });
+
+  app.patch("/api/users/:id", async (req, res, next) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const payload = {};
+      if (typeof req.body.email === "string") payload.email = req.body.email.trim().toLowerCase();
+      if (typeof req.body.name === "string") payload.name = req.body.name.trim();
+      if (typeof req.body.role === "string") payload.role = validateRole(req.body.role);
+      if (typeof req.body.active === "boolean") payload.active = req.body.active;
+      if (typeof req.body.password === "string" && req.body.password) {
+        if (req.body.password.length < 12) {
+          sendError(res, 400, "Password must be at least 12 characters");
+          return;
+        }
+        payload.passwordHash = hashPassword(req.body.password);
+      }
+      const user = await store.updateUser(req.params.id, payload);
+      if (!user) {
+        sendError(res, 404, "User not found");
+        return;
+      }
+      sendJson(res, 200, user);
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.get("/api/reviews/current", async (req, res, next) => {
@@ -696,6 +849,7 @@ async function main() {
 
   app.put("/api/reviews/:weekStart", async (req, res, next) => {
     try {
+      if (!requireEditor(req, res)) return;
       const { weekStart } = req.params;
       if (!isValidWeekStart(weekStart)) {
         sendError(res, 400, "Invalid week_start");
@@ -709,6 +863,7 @@ async function main() {
 
   app.post("/api/reviews/:weekStart/lock", async (req, res, next) => {
     try {
+      if (!requireEditor(req, res)) return;
       const { weekStart } = req.params;
       if (!isValidWeekStart(weekStart)) {
         sendError(res, 400, "Invalid week_start");

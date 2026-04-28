@@ -997,6 +997,7 @@ h1 svg {
 
 .editor-panel textarea,
 .editor-panel input,
+.editor-panel select,
 .department-editor input,
 .department-editor textarea,
 .editable-row input {
@@ -1027,6 +1028,7 @@ h1 svg {
 }
 
 .editor-panel input,
+.editor-panel select,
 .department-editor input {
   min-height: 36px;
   padding: 0 10px;
@@ -1196,6 +1198,72 @@ h1 svg {
 .department-settings {
   display: grid;
   gap: 10px;
+}
+
+.user-create-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.user-create-grid button {
+  min-height: 36px;
+  border: 1px solid #0f544f;
+  border-radius: 7px;
+  background: var(--teal);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.user-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.user-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.2fr) minmax(150px, 1fr) 112px 86px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid #e8e0d4;
+  border-radius: 7px;
+  background: var(--surface-strong);
+}
+
+.user-row strong,
+.user-row small {
+  display: block;
+}
+
+.user-row strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-row small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.user-row label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.user-row input[type="checkbox"] {
+  width: 16px;
+  min-height: 16px;
 }
 
 .department-editor {

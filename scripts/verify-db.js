@@ -18,7 +18,7 @@ async function main() {
       select table_name
       from information_schema.tables
       where table_schema = 'public'
-        and table_name in ('review_weeks', 'review_events', 'schema_migrations')
+        and table_name in ('review_weeks', 'review_events', 'review_users', 'schema_migrations')
       order by table_name
     `);
     const migrations = await pool.query(`
@@ -29,7 +29,8 @@ async function main() {
     const counts = await pool.query(`
       select
         (select count(*)::int from review_weeks) as review_weeks,
-        (select count(*)::int from review_events) as review_events
+        (select count(*)::int from review_events) as review_events,
+        (select count(*)::int from review_users) as review_users
     `);
 
     console.log(
