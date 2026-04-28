@@ -297,17 +297,17 @@ async function main() {
 
   const server = http.createServer(async (req, res) => {
     try {
-      if (!isAuthorized(req)) {
-        res.writeHead(401, { "WWW-Authenticate": 'Basic realm="Stability Product Review"', "Content-Type": "text/plain; charset=utf-8" });
-        res.end("Authentication required");
-        return;
-      }
-
       const url = new URL(req.url, `http://${req.headers.host}`);
       const pathname = decodeURIComponent(url.pathname);
 
       if (pathname === "/healthz") {
         sendJson(res, 200, { ok: true, store: store.kind });
+        return;
+      }
+
+      if (!isAuthorized(req)) {
+        res.writeHead(401, { "WWW-Authenticate": 'Basic realm="Stability Product Review"', "Content-Type": "text/plain; charset=utf-8" });
+        res.end("Authentication required");
         return;
       }
 
