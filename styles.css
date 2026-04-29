@@ -585,6 +585,11 @@ svg {
   color: var(--soft);
 }
 
+.profile:hover {
+  border-color: var(--line-strong);
+  background: #fff;
+}
+
 .content {
   width: min(100%, 1540px);
   margin: 0 auto;
@@ -1763,6 +1768,50 @@ dialog::backdrop {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.profile-dialog-card {
+  width: min(440px, calc(100vw - 28px));
+}
+
+.profile-summary {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffaf1;
+}
+
+.profile-summary > span {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: var(--teal-soft);
+  color: var(--teal);
+  font-weight: 850;
+}
+
+.profile-summary strong,
+.profile-summary small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-summary strong {
+  font-size: 14px;
+}
+
+.profile-summary small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 @media (max-width: 1180px) {

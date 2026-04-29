@@ -547,6 +547,16 @@ async function createStore() {
           );
           return result.rows[0] || null;
         },
+        async getUserById(id) {
+          const result = await pool.query(
+            `select id, email, name, role, active, created_at, updated_at
+             from review_users
+             where id = $1
+             limit 1`,
+            [id],
+          );
+          return publicUser(result.rows[0]);
+        },
         async listUsers() {
           const result = await pool.query(
             `select id, email, name, role, active, created_at, updated_at
@@ -643,6 +653,9 @@ async function createStore() {
     async getUserByEmail() {
       return null;
     },
+    async getUserById() {
+      return null;
+    },
     async listUsers() {
       return [];
     },
@@ -692,13 +705,23 @@ async function main() {
       jwt({ token, user }) {
         if (user) {
           token.username = user.email || user.id;
+          token.name = user.name || user.email || user.id;
           token.role = user.role || "editor";
         }
         return token;
       },
-      session({ session, token }) {
+      async session({ session, token }) {
         session.user = session.user || {};
+        const dbUser = token.sub ? await store.getUserById(token.sub) : null;
+        if (dbUser) {
+          session.user.id = dbUser.id;
+          session.user.name = dbUser.name;
+          session.user.username = dbUser.email;
+          session.user.role = dbUser.role;
+          return session;
+        }
         session.user.id = token.sub;
+        session.user.name = token.name || token.username || token.sub;
         session.user.username = token.username || token.sub;
         session.user.role = token.role || "editor";
         return session;
@@ -748,10 +771,51 @@ async function main() {
 
   app.get("/api/session", (req, res) => {
     sendJson(res, 200, {
+      id: req.authSession?.user?.id || null,
       username: req.authSession?.user?.username || req.authSession?.user?.name || "local",
+      name: req.authSession?.user?.name || req.authSession?.user?.username || "Local",
       role: req.authSession?.user?.role || "viewer",
       authDisabled: Boolean(req.authSession?.authDisabled),
     });
+  });
+
+  app.get("/api/me", async (req, res, next) => {
+    try {
+      if (req.authSession?.authDisabled) {
+        sendJson(res, 200, { username: "local", name: "Local", role: "admin", authDisabled: true });
+        return;
+      }
+      const user = await store.getUserById(req.authSession?.user?.id);
+      sendJson(res, 200, user || req.authSession.user);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.patch("/api/me", async (req, res, next) => {
+    try {
+      if (req.authSession?.authDisabled) {
+        sendError(res, 400, "Profile editing requires a signed-in user");
+        return;
+      }
+      const payload = {};
+      if (typeof req.body.name === "string") payload.name = req.body.name.trim();
+      if (typeof req.body.password === "string" && req.body.password) {
+        if (req.body.password.length < 12) {
+          sendError(res, 400, "Password must be at least 12 characters");
+          return;
+        }
+        payload.passwordHash = hashPassword(req.body.password);
+      }
+      const user = await store.updateUser(req.authSession.user.id, payload);
+      if (!user) {
+        sendError(res, 404, "User not found");
+        return;
+      }
+      sendJson(res, 200, user);
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.get("/api/users", async (req, res, next) => {

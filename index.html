@@ -58,10 +58,10 @@
           </a>
         </nav>
 
-        <button class="profile" type="button">
-          <span>EK</span>
-          <strong>Ethan Kaplan</strong>
-          <small>Department Head</small>
+        <button class="profile" type="button" id="profileButton">
+          <span id="profileInitials">EK</span>
+          <strong id="profileName">Ethan Kaplan</strong>
+          <small id="profileRole">Department Head</small>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
         </button>
       </aside>
@@ -429,6 +429,36 @@
         <footer>
           <button type="submit" value="cancel">Cancel</button>
           <button class="primary-action" id="createUpdate" value="default">Add update</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog id="profileDialog">
+      <form method="dialog" class="dialog-card profile-dialog-card">
+        <header>
+          <h2>Profile</h2>
+          <button type="submit" value="cancel" aria-label="Close">
+            <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>
+        </header>
+        <div class="profile-summary">
+          <span id="profileDialogInitials">EK</span>
+          <div>
+            <strong id="profileDialogEmail">ethan.kaplan@stability.ai</strong>
+            <small id="profileDialogRole">Admin</small>
+          </div>
+        </div>
+        <label>
+          Display name
+          <input id="profileDisplayName" type="text" autocomplete="name" />
+        </label>
+        <label>
+          New password
+          <input id="profilePassword" type="password" autocomplete="new-password" placeholder="Leave blank to keep current password" />
+        </label>
+        <footer>
+          <button type="submit" value="cancel">Cancel</button>
+          <button class="primary-action" id="saveProfile" value="default">Save profile</button>
         </footer>
       </form>
     </dialog>

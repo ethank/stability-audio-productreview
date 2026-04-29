@@ -97,6 +97,7 @@ const northStarInput = document.querySelector("#northStarInput");
 const historyRows = document.querySelector("#historyRows");
 const historyDetailRows = document.querySelector("#historyDetailRows");
 const dialog = document.querySelector("#updateDialog");
+const profileDialog = document.querySelector("#profileDialog");
 const presentation = document.querySelector("#presentation");
 const presentationStage = document.querySelector("#presentationStage");
 const presentationWeek = document.querySelector("#presentationWeek");
@@ -124,6 +125,10 @@ const startFromPreviousWeekButton = document.querySelector("#startFromPreviousWe
 const markReadyButton = document.querySelector("#markReady");
 const lockWeekFromWorkflowButton = document.querySelector("#lockWeekFromWorkflow");
 const logoutButton = document.querySelector("#logoutButton");
+const profileButton = document.querySelector("#profileButton");
+const profileName = document.querySelector("#profileName");
+const profileRole = document.querySelector("#profileRole");
+const profileInitials = document.querySelector("#profileInitials");
 
 const VIEW_TITLES = {
   review: "Monday Review",
@@ -254,6 +259,25 @@ async function loadUsers() {
   if (window.location.protocol === "file:" || currentSession.role !== "admin") return;
   const response = await appFetch("/api/users");
   if (response.ok) users = (await response.json()).users || [];
+}
+
+function roleLabel(role) {
+  return role ? `${role.charAt(0).toUpperCase()}${role.slice(1)}` : "Viewer";
+}
+
+function initialsFor(value) {
+  const parts = String(value || "User").split(/[\s@._-]+/).filter(Boolean);
+  return parts
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+}
+
+function renderProfileSummary() {
+  const displayName = currentSession.name || currentSession.username || "User";
+  profileName.textContent = displayName;
+  profileRole.textContent = roleLabel(currentSession.role);
+  profileInitials.textContent = initialsFor(displayName);
 }
 
 function allItems(lane) {
@@ -709,6 +733,7 @@ function renderApp() {
   renderHistoryPage();
   renderSettingsPage();
   setActiveView(activeView, false);
+  renderProfileSummary();
   saveStateLabel.textContent = saveState;
   if (!presentation.hidden) renderPresentation();
 }
@@ -1036,6 +1061,14 @@ headUpdateLong.addEventListener("input", () => {
 });
 
 document.querySelector("#openUpdate").addEventListener("click", () => dialog.showModal());
+profileButton.addEventListener("click", () => {
+  document.querySelector("#profileDialogInitials").textContent = initialsFor(currentSession.name || currentSession.username);
+  document.querySelector("#profileDialogEmail").textContent = currentSession.username || "local";
+  document.querySelector("#profileDialogRole").textContent = roleLabel(currentSession.role);
+  document.querySelector("#profileDisplayName").value = currentSession.name || currentSession.username || "";
+  document.querySelector("#profilePassword").value = "";
+  profileDialog.showModal();
+});
 document.querySelector("#presentMode").addEventListener("click", openPresentation);
 document.querySelector("#exportReview").addEventListener("click", exportReview);
 logoutButton.addEventListener("click", () => {
@@ -1055,6 +1088,36 @@ logoutButton.addEventListener("click", () => {
 document.querySelector("#exitPresentation").addEventListener("click", closePresentation);
 document.querySelector("#prevSlide").addEventListener("click", () => changeSlide(-1));
 document.querySelector("#nextSlide").addEventListener("click", () => changeSlide(1));
+document.querySelector("#saveProfile").addEventListener("click", async (event) => {
+  event.preventDefault();
+  const payload = {
+    name: document.querySelector("#profileDisplayName").value.trim(),
+  };
+  const password = document.querySelector("#profilePassword").value;
+  if (password) payload.password = password;
+  const response = await appFetch("/api/me", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    saveState = "Profile update failed";
+    saveStateLabel.textContent = saveState;
+    return;
+  }
+  const user = await response.json();
+  currentSession = {
+    ...currentSession,
+    id: user.id || currentSession.id,
+    username: user.email || currentSession.username,
+    name: user.name || currentSession.name,
+    role: user.role || currentSession.role,
+  };
+  renderProfileSummary();
+  profileDialog.close();
+  saveState = "Profile saved";
+  saveStateLabel.textContent = saveState;
+});
 document.querySelector("#addTeamWideUpdate").addEventListener("click", () => {
   mutateReview(() => review.teamWideUpdates.push("New team-wide update"));
 });
