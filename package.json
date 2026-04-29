@@ -9,9 +9,10 @@
     "dev": "node server.js",
     "migrate": "node scripts/migrate.js",
     "verify-db": "node scripts/verify-db.js",
+    "clear-review-data": "node scripts/clear-review-data.js",
     "hash-password": "node scripts/hash-password.js",
     "seed-admin": "node scripts/seed-admin.js",
-    "check": "node --check server.js && node --check app.js && node --check scripts/migrate.js && node --check scripts/verify-db.js && node --check scripts/hash-password.js && node --check scripts/seed-admin.js && node --check lib/passwords.js"
+    "check": "node --check server.js && node --check app.js && node --check scripts/migrate.js && node --check scripts/verify-db.js && node --check scripts/clear-review-data.js && node --check scripts/hash-password.js && node --check scripts/seed-admin.js && node --check lib/passwords.js"
   },
   "engines": {
     "node": ">=20"
