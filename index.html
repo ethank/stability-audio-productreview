@@ -52,6 +52,10 @@
             <svg viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z" /><path d="m19.4 15 1.2 2.1-2.1 3.6-2.5-1a8.6 8.6 0 0 1-2.4 1.4L13.2 24H9l-.4-2.9a8.6 8.6 0 0 1-2.4-1.4l-2.5 1-2.1-3.6L2.8 15a8.2 8.2 0 0 1 0-2.8L1.6 10 3.7 6.4l2.5 1A8.6 8.6 0 0 1 8.6 6L9 3.2h4.2l.4 2.8A8.6 8.6 0 0 1 16 7.4l2.5-1 2.1 3.6-1.2 2.2a8.2 8.2 0 0 1 0 2.8z" /></svg>
             Settings
           </a>
+          <a href="#help" data-view-link="help">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M9.1 9a3 3 0 1 1 4.9 2.3c-.9.7-1.5 1.2-1.5 2.7M12 17h.01" /></svg>
+            How this works
+          </a>
         </nav>
 
         <button class="profile" type="button">
@@ -343,6 +347,50 @@
                 <button type="button" id="createUser">Create user</button>
               </div>
               <div class="user-list" id="userList"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="workspace-panel app-view" id="helpView" data-view="help" hidden>
+          <header>
+            <div>
+              <h2>
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M9.1 9a3 3 0 1 1 4.9 2.3c-.9.7-1.5 1.2-1.5 2.7M12 17h.01" /></svg>
+                How this works
+              </h2>
+              <p>Run the Monday review from one canonical record instead of a deck.</p>
+            </div>
+          </header>
+          <div class="help-grid">
+            <article class="help-card primary">
+              <span>1</span>
+              <h3>Start the week</h3>
+              <p>Use Start from previous week to pull open commitments into Last Week Follow-up, or Start blank when the team needs a clean slate.</p>
+            </article>
+            <article class="help-card">
+              <span>2</span>
+              <h3>Update teams</h3>
+              <p>Select Research, Engineering, or Product, then edit follow-ups, this-week commitments, blockers, and MVPs directly on the board.</p>
+            </article>
+            <article class="help-card">
+              <span>3</span>
+              <h3>Use supporting views</h3>
+              <p>Updates captures department-head and team-wide notes. MVPs groups shipped work. History keeps the canonical record visible.</p>
+            </article>
+            <article class="help-card">
+              <span>4</span>
+              <h3>Present live</h3>
+              <p>Present mode turns the current record into a shareable walkthrough. No deck export or copy-paste step is needed.</p>
+            </article>
+            <article class="help-card">
+              <span>5</span>
+              <h3>Lock the record</h3>
+              <p>Mark ready before review, then lock the week after the meeting so the final state is clear to everyone.</p>
+            </article>
+            <article class="help-card">
+              <span>6</span>
+              <h3>Manage access</h3>
+              <p>Admins add users in Settings. Editors can update and lock reviews. Viewers can read and present without changing the record.</p>
             </article>
           </div>
         </section>

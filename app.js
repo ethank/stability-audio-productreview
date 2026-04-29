@@ -131,6 +131,7 @@ const VIEW_TITLES = {
   mvps: "MVPs",
   history: "History",
   settings: "Settings",
+  help: "How this works",
 };
 
 const STATUS_LABELS = {
@@ -142,7 +143,7 @@ const STATUS_LABELS = {
 
 function viewFromHash() {
   const view = window.location.hash.replace("#", "");
-  return ["review", "updates", "mvps", "history", "settings"].includes(view) ? view : "review";
+  return ["review", "updates", "mvps", "history", "settings", "help"].includes(view) ? view : "review";
 }
 
 function setActiveView(view = "review", push = true) {

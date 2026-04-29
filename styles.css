@@ -959,6 +959,52 @@ h1 svg {
   justify-content: flex-end;
 }
 
+.help-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 12px;
+  padding: 12px;
+}
+
+.help-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #e6dfd3;
+  border-radius: var(--radius);
+  background: #fffaf1;
+}
+
+.help-card.primary {
+  border-color: #c9dfda;
+  background: #f1f8f6;
+}
+
+.help-card span {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--teal-soft);
+  color: var(--teal);
+  font-size: 12px;
+  font-weight: 860;
+}
+
+.help-card h3 {
+  margin-top: 14px;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.help-card p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .workspace-grid,
 .history-detail {
   display: grid;
@@ -1738,7 +1784,8 @@ dialog::backdrop {
 
   .workspace-grid,
   .history-detail,
-  .mvp-summary {
+  .mvp-summary,
+  .help-grid {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -1848,6 +1895,7 @@ dialog::backdrop {
   .workspace-grid,
   .history-detail,
   .mvp-summary,
+  .help-grid,
   .department-editor {
     grid-template-columns: 1fr;
   }
